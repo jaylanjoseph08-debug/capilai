@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 15 13 12;
+  --surface: 26 22 19;
+  --surface-2: 34 29 25;
+  --text: 245 239 230;
+  --muted: 147 134 123;
+  --line-rgb: 245 239 230;
+  --line-op: 0.08;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: 250 247 241;
+  --surface: 255 255 255;
+  --surface-2: 240 233 224;
+  --text: 28 22 18;
+  --muted: 120 106 96;
+  --line-rgb: 28 22 18;
+  --line-op: 0.1;
+  color-scheme: light;
+}
+
+html {
+  transition: background-color 0.25s ease;
+}
+
+html,
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #c97c4b;
+  color: #0f0d0c;
+}
+
+.glass {
+  background: rgb(var(--text) / 0.045);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgb(var(--line-rgb) / var(--line-op));
+}
+
+video {
+  background: rgb(var(--surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

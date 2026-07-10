@@ -1,0 +1,211 @@
+// HairAI — data model
+// Run against Postgres (Supabase). This schema is the target for Phase 2
+// once the app moves off local/mock state.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  authProvider  AuthProvider   @default(EMAIL)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  subscription  Subscription?
+  questionnaires Questionnaire[]
+  hairProfiles  HairProfile[]
+  videos        Video[]
+  analyses      Analysis[]
+  reports       Report[]
+  hairScores    HairScore[]
+  userProducts  UserProduct[]
+  routines      Routine[]
+  calendarEvents CalendarEvent[]
+  settings      Settings?
+  sessions      Session[]
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  user                 User      @relation(fields: [userId], references: [id])
+  userId               String    @unique
+  plan                 Plan      @default(FREE)
+  status               String    @default("active")
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+  PRO
+}
+
+model Questionnaire {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  answers   Json
+  createdAt DateTime @default(now())
+  analyses  Analysis[]
+}
+
+model Video {
+  id         String     @id @default(cuid())
+  user       User       @relation(fields: [userId], references: [id])
+  userId     String
+  storageUrl String
+  duration   Int?
+  createdAt  DateTime   @default(now())
+  analysis   Analysis?
+}
+
+model Analysis {
+  id             String       @id @default(cuid())
+  user           User         @relation(fields: [userId], references: [id])
+  userId         String
+  video          Video        @relation(fields: [videoId], references: [id])
+  videoId        String       @unique
+  questionnaire  Questionnaire? @relation(fields: [questionnaireId], references: [id])
+  questionnaireId String?
+  rawModelOutput Json?
+  status         AnalysisStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+  hairProfile    HairProfile?
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model HairProfile {
+  id              String   @id @default(cuid())
+  user            User     @relation(fields: [userId], references: [id])
+  userId          String
+  analysis        Analysis @relation(fields: [analysisId], references: [id])
+  analysisId      String   @unique
+  hairType        String
+  density         Int
+  thickness       Int
+  volume          Int
+  elasticity      Int
+  porosity        Int
+  health          Int
+  scalpCondition  Int
+  hydration       Int
+  breakageLevel   String
+  frizz           String
+  curlDefinition  String
+  priorities      String[]
+  createdAt       DateTime @default(now())
+
+  report          Report?
+  hairScore       HairScore?
+  routine         Routine?
+}
+
+model HairScore {
+  id            String      @id @default(cuid())
+  user          User        @relation(fields: [userId], references: [id])
+  userId        String
+  hairProfile   HairProfile @relation(fields: [hairProfileId], references: [id])
+  hairProfileId String      @unique
+  score         Int
+  createdAt     DateTime    @default(now())
+}
+
+model Report {
+  id             String      @id @default(cuid())
+  user           User        @relation(fields: [userId], references: [id])
+  userId         String
+  hairProfile    HairProfile @relation(fields: [hairProfileId], references: [id])
+  hairProfileId  String      @unique
+  summary        String
+  strengths      String[]
+  weaknesses     String[]
+  probableCauses String[]
+  advice         String[]
+  createdAt      DateTime    @default(now())
+}
+
+model Routine {
+  id            String      @id @default(cuid())
+  user          User        @relation(fields: [userId], references: [id])
+  userId        String
+  hairProfile   HairProfile @relation(fields: [hairProfileId], references: [id])
+  hairProfileId String      @unique
+  morning       String[]
+  evening       String[]
+  washDay       String[]
+  masks         String[]
+  oils          String[]
+  frequency     String
+  createdAt     DateTime    @default(now())
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  barcode      String?       @unique
+  name         String
+  brand        String?
+  ingredients  String[]
+  category     String?
+  createdAt    DateTime      @default(now())
+  userProducts UserProduct[]
+}
+
+model UserProduct {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  product      Product  @relation(fields: [productId], references: [id])
+  productId    String
+  compatibility Int?
+  addedAt      DateTime @default(now())
+}
+
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      String   // wash | mask | oil | care | haircut
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model Settings {
+  id           String  @id @default(cuid())
+  user         User    @relation(fields: [userId], references: [id])
+  userId       String  @unique
+  theme        String  @default("dark")
+  locale       String  @default("fr")
+  notifications Boolean @default(true)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}

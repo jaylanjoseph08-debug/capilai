@@ -1,0 +1,18 @@
+{
+  "name": "capilai-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "encore run",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "encore.dev": "^1.52.0",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}
