@@ -14,12 +14,14 @@ import { useScannerStore, type ScanRecord } from "@/lib/scannerStore";
 import { getDemoCodes } from "@/lib/i18n";
 import { hasPrivateAccess } from "@/lib/privateAccess";
 import { useTranslation } from "@/lib/useTranslation";
+import { useRequirePaidAccess } from "@/lib/useRequirePaidAccess";
 import { BottomNav } from "@/components/ui/BottomNav";
 
 type Phase = "scan" | "loading" | "result" | "not_found";
 
 export default function ScannerPage() {
   const router = useRouter();
+  const allowed = useRequirePaidAccess();
   const { locale, t } = useTranslation();
   const { profile, answers } = useHairAIStore();
   const { history, closet, addScan, addToCloset } = useScannerStore();
@@ -73,6 +75,8 @@ export default function ScannerPage() {
   }
 
   const inCloset = current ? closet.some((r) => r.product.barcode === current.product.barcode) : false;
+
+  if (!allowed) return null;
 
   return (
     <main className="min-h-screen bg-ink-radial px-6 pb-28 pt-10">

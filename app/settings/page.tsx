@@ -59,13 +59,16 @@ export default function SettingsPage() {
         {tab === "abonnement" && <AbonnementTab />}
         {tab === "parametres" && <ParametresTab />}
 
-        <Link
-          href="/admin"
-          className="mt-10 block text-center font-mono text-[10px] uppercase tracking-widest text-muted hover:text-copper"
-        >
-          {t("settings.adminLink")}
-        </Link>
+        {process.env.NODE_ENV === 'development' && (
+          <Link
+            href="/admin"
+            className="mt-10 block text-center font-mono text-[10px] uppercase tracking-widest text-muted hover:text-copper"
+          >
+            {t("settings.adminLink")}
+          </Link>
+        )}
       </div>
+
       <BottomNav />
     </main>
   );

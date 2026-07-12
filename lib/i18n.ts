@@ -219,7 +219,7 @@ const translations = {
       language: "Language",
       resetData: "Reset my local data",
       resetConfirm: "Reset all local data (diagnosis, scans, calendar, account)?",
-      adminLink: "Access admin back-office (demo)",
+      adminLink: "Access admin back-office",
     },
     report: {
       noReport: "No report available",
@@ -328,9 +328,12 @@ const translations = {
     },
     admin: {
       back: "Account",
-      title: "Back-office · demo",
-      demoNote:
-        "Static demo data. In Phase 3, each section queries the corresponding Prisma tables behind admin role verification.",
+      title: "Back-office",
+      liveNote: "Live data from Supabase Auth and subscriptions.",
+      unauthorized: "Sign in with an admin account to access the back-office.",
+      emptyUsers: "No registered users yet.",
+      emptyReports: "No reports stored on the server yet.",
+      emptyProducts: "No products pending moderation.",
       tabs: {
         overview: "Overview",
         users: "Users",
@@ -554,7 +557,7 @@ const translations = {
       resetData: "Réinitialiser mes données locales",
       resetConfirm:
         "Réinitialiser toutes vos données locales (diagnostic, scans, calendrier, compte) ?",
-      adminLink: "Accéder au back-office (démo admin)",
+      adminLink: "Accéder au back-office",
     },
     report: {
       noReport: "Aucun rapport disponible",
@@ -664,9 +667,12 @@ const translations = {
     },
     admin: {
       back: "Compte",
-      title: "Back-office · démo",
-      demoNote:
-        "Données de démonstration statiques. En Phase 3, chaque section interroge les tables Prisma correspondantes derrière une vérification de rôle admin.",
+      title: "Back-office",
+      liveNote: "Données en direct depuis Supabase Auth et les abonnements.",
+      unauthorized: "Connectez-vous avec un compte administrateur pour accéder au back-office.",
+      emptyUsers: "Aucun utilisateur inscrit pour le moment.",
+      emptyReports: "Aucun rapport enregistré côté serveur pour le moment.",
+      emptyProducts: "Aucun produit en attente de modération.",
       tabs: {
         overview: "Vue d'ensemble",
         users: "Utilisateurs",

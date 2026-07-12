@@ -72,8 +72,10 @@ export const useAuthStore = create<AuthState>()((set) => ({
   signIn: async (email, password) => {
     if (!isSupabaseConfigured()) return { error: "not_configured" };
     const supabase = getSupabase();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
+    const user = mapSupabaseUser(data.user);
+    if (user) set({ user, isAuthenticated: true, isLoading: false });
     return {};
   },
 

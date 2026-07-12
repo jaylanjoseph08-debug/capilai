@@ -1,16 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ADMIN_REPORTS,
-  ADMIN_USERS,
-  MODERATION_QUEUE,
-  MONITORING,
-  getStats,
-  type ModerationItem,
-} from "@/lib/adminMockData";
-
+import { fetchAdminLiveData } from "@/lib/adminApi";
+import type { AdminLiveData } from "@/lib/adminLive";
+import type { AdminUser, ModerationItem } from "@/lib/adminMockData";
 import { useTranslation } from "@/lib/useTranslation";
 import type { TranslationKey } from "@/lib/i18n";
 
@@ -24,9 +18,36 @@ const TAB_KEYS: [Tab, TranslationKey][] = [
   ["monitoring", "admin.tabs.monitoring"],
 ];
 
+type LoadState = "loading" | "ready" | "unauthorized" | "error";
+
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("overview");
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [data, setData] = useState<AdminLiveData | null>(null);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoadState("loading");
+      const result = await fetchAdminLiveData();
+      if (cancelled) return;
+
+      if (!result) {
+        setLoadState("unauthorized");
+        return;
+      }
+
+      setData(result);
+      setLoadState("ready");
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <main className="min-h-screen bg-ink-radial px-6 pb-16 pt-10">
@@ -39,28 +60,42 @@ export default function AdminPage() {
         </div>
 
         <p className="mb-6 rounded-2xl border border-copper/30 bg-copper/10 p-3 font-body text-xs text-cream/80">
-          {t("admin.demoNote")}
+          {t("admin.liveNote")}
         </p>
 
-        <div className="mb-8 flex gap-2 overflow-x-auto rounded-full border border-line p-1">
-          {TAB_KEYS.map(([value, labelKey]) => (
-            <button
-              key={value}
-              onClick={() => setTab(value)}
-              className={`flex-shrink-0 whitespace-nowrap rounded-full px-4 py-2 font-body text-xs transition ${
-                tab === value ? "bg-copper-gradient font-semibold text-ink" : "text-muted"
-              }`}
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </div>
+        {loadState === "loading" && (
+          <p className="font-body text-sm text-muted">{t("common.loading")}</p>
+        )}
 
-        {tab === "overview" && <OverviewTab />}
-        {tab === "users" && <UsersTab />}
-        {tab === "reports" && <ReportsTab />}
-        {tab === "products" && <ProductsTab />}
-        {tab === "monitoring" && <MonitoringTab />}
+        {loadState === "unauthorized" && (
+          <p className="rounded-2xl border border-copper/40 bg-copper/5 p-4 font-body text-sm text-copper-light">
+            {t("admin.unauthorized")}
+          </p>
+        )}
+
+        {loadState === "ready" && data && (
+          <>
+            <div className="mb-8 flex gap-2 overflow-x-auto rounded-full border border-line p-1">
+              {TAB_KEYS.map(([value, labelKey]) => (
+                <button
+                  key={value}
+                  onClick={() => setTab(value)}
+                  className={`flex-shrink-0 whitespace-nowrap rounded-full px-4 py-2 font-body text-xs transition ${
+                    tab === value ? "bg-copper-gradient font-semibold text-ink" : "text-muted"
+                  }`}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+
+            {tab === "overview" && <OverviewTab stats={data.stats} />}
+            {tab === "users" && <UsersTab users={data.users} emptyLabel={t("admin.emptyUsers")} />}
+            {tab === "reports" && <ReportsTab reports={data.reports} emptyLabel={t("admin.emptyReports")} />}
+            {tab === "products" && <ProductsTab moderation={data.moderation} emptyLabel={t("admin.emptyProducts")} />}
+            {tab === "monitoring" && <MonitoringTab metrics={data.monitoring} />}
+          </>
+        )}
       </div>
     </main>
   );
@@ -75,8 +110,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function OverviewTab() {
-  const stats = getStats();
+function OverviewTab({ stats }: { stats: AdminLiveData["stats"] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <StatCard label="Utilisateurs" value={stats.totalUsers} />
@@ -84,8 +118,8 @@ function OverviewTab() {
       <StatCard label="En essai" value={stats.trial} />
       <StatCard label="Résiliés" value={stats.churned} />
       <StatCard label="MRR estimé" value={`${stats.mrr.toFixed(2)}€`} />
-      <StatCard label="Score moyen" value={stats.avgScore} />
-      <StatCard label="Analyses cumulées" value={stats.analysesThisWeek} />
+      <StatCard label="Score moyen" value={stats.avgScore ?? "—"} />
+      <StatCard label="Analyses (total)" value={stats.analysesTotal} />
     </div>
   );
 }
@@ -99,7 +133,7 @@ function PlanBadge({ plan }: { plan: "free" | "premium" | "pro" }) {
   );
 }
 
-function StatusBadge({ status }: { status: "active" | "essai" | "résilié" }) {
+function StatusBadge({ status }: { status: AdminUser["status"] }) {
   const tone = status === "active" ? "#8FBF8A" : status === "essai" ? "#E8B86D" : "#D97757";
   return (
     <span className="rounded-full px-2.5 py-1 font-mono text-[10px] uppercase" style={{ backgroundColor: `${tone}22`, color: tone }}>
@@ -108,7 +142,11 @@ function StatusBadge({ status }: { status: "active" | "essai" | "résilié" }) {
   );
 }
 
-function UsersTab() {
+function UsersTab({ users, emptyLabel }: { users: AdminUser[]; emptyLabel: string }) {
+  if (users.length === 0) {
+    return <p className="font-body text-sm text-muted">{emptyLabel}</p>;
+  }
+
   return (
     <div className="glass overflow-x-auto rounded-3xl p-2">
       <table className="w-full min-w-[560px] text-left">
@@ -123,7 +161,7 @@ function UsersTab() {
           </tr>
         </thead>
         <tbody>
-          {ADMIN_USERS.map((u) => (
+          {users.map((u) => (
             <tr key={u.id} className="border-t border-line font-body text-sm text-cream/80">
               <td className="px-3 py-3">
                 <p className="text-cream">{u.name}</p>
@@ -146,10 +184,20 @@ function UsersTab() {
   );
 }
 
-function ReportsTab() {
+function ReportsTab({
+  reports,
+  emptyLabel,
+}: {
+  reports: AdminLiveData["reports"];
+  emptyLabel: string;
+}) {
+  if (reports.length === 0) {
+    return <p className="font-body text-sm text-muted">{emptyLabel}</p>;
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      {ADMIN_REPORTS.map((r) => (
+      {reports.map((r) => (
         <div key={r.id} className="glass flex items-center justify-between rounded-2xl p-4">
           <div>
             <p className="font-body text-sm text-cream">{r.userName}</p>
@@ -164,14 +212,22 @@ function ReportsTab() {
   );
 }
 
-function ProductsTab() {
-  const [queue, setQueue] = useState<ModerationItem[]>(MODERATION_QUEUE);
-  const contentItems = [
-    { id: "c1", title: "Modèle de routine — cheveux bouclés", published: true },
-    { id: "c2", title: "Modèle de routine — cuir chevelu gras", published: true },
-    { id: "c3", title: "Guide porosité (article pédagogique)", published: false },
-  ];
-  const [content, setContent] = useState(contentItems);
+function ProductsTab({
+  moderation,
+  emptyLabel,
+}: {
+  moderation: ModerationItem[];
+  emptyLabel: string;
+}) {
+  const [queue, setQueue] = useState<ModerationItem[]>(moderation);
+
+  useEffect(() => {
+    setQueue(moderation);
+  }, [moderation]);
+
+  if (queue.length === 0) {
+    return <p className="font-body text-sm text-muted">{emptyLabel}</p>;
+  }
 
   function setStatus(id: string, status: ModerationItem["status"]) {
     setQueue((q) => q.map((item) => (item.id === id ? { ...item, status } : item)));
@@ -180,7 +236,7 @@ function ProductsTab() {
   return (
     <div>
       <h2 className="mb-3 font-display text-lg text-cream">File de modération produits</h2>
-      <div className="mb-8 flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         {queue.map((item) => (
           <div key={item.id} className="glass rounded-2xl p-4">
             <div className="flex items-start justify-between">
@@ -210,31 +266,14 @@ function ProductsTab() {
           </div>
         ))}
       </div>
-
-      <h2 className="mb-3 font-display text-lg text-cream">Contenu éditorial</h2>
-      <div className="flex flex-col gap-2">
-        {content.map((c) => (
-          <div key={c.id} className="glass flex items-center justify-between rounded-2xl p-4">
-            <p className="font-body text-sm text-cream">{c.title}</p>
-            <button
-              onClick={() => setContent((items) => items.map((it) => (it.id === c.id ? { ...it, published: !it.published } : it)))}
-              className={`rounded-full px-3 py-1.5 font-mono text-[10px] uppercase ${
-                c.published ? "bg-copper/15 text-copper-light" : "border border-line text-muted"
-              }`}
-            >
-              {c.published ? "Publié" : "Brouillon"}
-            </button>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
 
-function MonitoringTab() {
+function MonitoringTab({ metrics }: { metrics: AdminLiveData["monitoring"] }) {
   return (
     <div className="flex flex-col gap-2">
-      {MONITORING.map((m) => {
+      {metrics.map((m) => {
         const tone = m.tone === "ok" ? "#8FBF8A" : m.tone === "warn" ? "#E8B86D" : "#D97757";
         return (
           <div key={m.label} className="glass flex items-center justify-between rounded-2xl p-4">
