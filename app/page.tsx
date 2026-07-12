@@ -1,13 +1,28 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StrandGauge } from "@/components/ui/StrandGauge";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { LanguageToggle } from "@/components/ui/LanguageToggle";
+import { resolveProfileEntryPath } from "@/lib/postAuthRedirect";
 import { useTranslation } from "@/lib/useTranslation";
 
 export default function LandingPage() {
+  const router = useRouter();
   const { t } = useTranslation();
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  async function handleProfileClick() {
+    setProfileLoading(true);
+    try {
+      const path = await resolveProfileEntryPath();
+      router.push(path);
+    } finally {
+      setProfileLoading(false);
+    }
+  }
 
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-ink-radial">
@@ -48,12 +63,14 @@ export default function LandingPage() {
           >
             {t("home.ctaLogin")}
           </Link>
-          <Link
-            href="/dashboard"
-            className="flex h-12 items-center justify-center font-body text-sm text-copper-light transition hover:text-copper"
+          <button
+            type="button"
+            onClick={handleProfileClick}
+            disabled={profileLoading}
+            className="flex h-12 items-center justify-center font-body text-sm text-copper-light transition hover:text-copper disabled:opacity-60"
           >
-            {t("home.ctaProfile")}
-          </Link>
+            {profileLoading ? "…" : t("home.ctaProfile")}
+          </button>
           <Link
             href="/private-access"
             className="flex h-12 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-muted transition hover:text-copper"

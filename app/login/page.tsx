@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/authStore";
+import { resolvePostLoginPath } from "@/lib/postAuthRedirect";
 import { OAuthButton } from "@/components/ui/BrandMarks";
 import { useTranslation } from "@/lib/useTranslation";
 
@@ -46,7 +47,8 @@ export default function LoginPage() {
       setError(resolveAuthError(t, result.error));
       return;
     }
-    router.push("/dashboard");
+    const path = await resolvePostLoginPath("/dashboard");
+    router.push(path);
   }
 
   return (

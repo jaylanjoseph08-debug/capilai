@@ -20,12 +20,12 @@ export function SubscriptionSync() {
 
   useEffect(() => {
     if (hasPrivateAccess()) {
-      markReady(true);
+      markReady();
       return;
     }
 
     if (!isSupabaseConfigured() || !isConfigured) {
-      markReady(null);
+      markReady();
       return;
     }
 
@@ -33,7 +33,7 @@ export function SubscriptionSync() {
 
     if (!isAuthenticated) {
       resetSync();
-      markReady(null);
+      markReady();
       return;
     }
 
@@ -45,16 +45,13 @@ export function SubscriptionSync() {
       const payload = await fetchSubscriptionFromServer();
       if (cancelled) return;
 
-      const active = Boolean(payload?.configured && payload.hasActiveSubscription && payload.plan);
-
-      if (active && payload?.plan) {
+      if (payload?.configured && payload.hasActiveSubscription && payload.plan) {
         setPlan(payload.plan, payload.billingCycle ?? "annual");
-        markReady(true);
-        return;
+      } else if (payload?.configured) {
+        cancelSubscription();
       }
 
-      cancelSubscription();
-      markReady(false);
+      markReady();
     }
 
     void sync();

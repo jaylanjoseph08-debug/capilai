@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { resolvePostLoginPath } from "@/lib/postAuthRedirect";
 import { useTranslation } from "@/lib/useTranslation";
 
 export default function AuthCallbackPage() {
@@ -57,7 +58,8 @@ function AuthCallbackContent() {
           throw new Error("No session after OAuth callback");
         }
 
-        if (!cancelled) router.replace(next);
+        const path = await resolvePostLoginPath(next);
+        if (!cancelled) router.replace(path);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : t("auth.login.authFailed"));

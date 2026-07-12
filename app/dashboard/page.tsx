@@ -9,7 +9,6 @@ import { useAuthStore } from "@/lib/authStore";
 import { useSelectedPlan } from "@/lib/subscriptionStore";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { hasPaidAccess } from "@/lib/subscriptionAccess";
-import { hasPrivateAccess } from "@/lib/privateAccess";
 import { getMetricLabels } from "@/lib/i18n";
 import { getProfileForLocale } from "@/lib/profileDisplay";
 import { StrandGauge } from "@/components/ui/StrandGauge";
@@ -32,9 +31,7 @@ function DashboardContent() {
   const { locale, t } = useTranslation();
   const plan = useSelectedPlan();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const authLoading = useAuthStore((s) => s.isLoading);
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
-  const hasActiveSubscription = useSubscriptionSyncStore((s) => s.hasActiveSubscription);
   const metricLabels = getMetricLabels(locale);
   const { profile: storedProfile, answers } = useHairAIStore();
   const profile = useMemo(
@@ -49,12 +46,9 @@ function DashboardContent() {
     }
   }, [profile, plan, syncReady, router]);
 
-  if (!syncReady || authLoading) {
+  if (!syncReady) {
     return null;
   }
-
-  const showScanWithoutDiagnostic =
-    hasPrivateAccess() || !isAuthenticated || hasActiveSubscription === true;
 
   if (profile && !hasPaidAccess(plan)) {
     return null;
@@ -79,7 +73,7 @@ function DashboardContent() {
         >
           {t("dashboard.startDiagnostic")}
         </Link>
-        {showScanWithoutDiagnostic && (
+        {(!isAuthenticated || hasPaidAccess(plan)) && (
           <Link href="/scanner" className="font-body text-xs text-muted underline underline-offset-2 hover:text-copper-light">
             {t("dashboard.scanWithoutDiagnostic")}
           </Link>
