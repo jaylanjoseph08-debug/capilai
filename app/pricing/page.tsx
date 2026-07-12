@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
-import { useSubscriptionStore, type Plan, type BillingCycle } from "@/lib/subscriptionStore";
+import { useSubscriptionStore, useSelectedPlan, type Plan, type BillingCycle } from "@/lib/subscriptionStore";
+import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
+import { hasPaidAccess } from "@/lib/subscriptionAccess";
+import { hasPrivateAccess } from "@/lib/privateAccess";
 import { PLAN_PRICES, getPlanFeatures, annualSavingsPercent, formatPrice, isLifetimePrice, lifetimeFeatureLabel } from "@/lib/pricing";
 import { startCheckout, isCheckoutSuccess } from "@/lib/stripe";
 import { useTranslation } from "@/lib/useTranslation";
@@ -31,6 +34,9 @@ function PricingContent() {
   const highlightPlan: Plan | null =
     upgradeParam === "premium" || upgradeParam === "pro" ? upgradeParam : null;
   const { plan: currentPlan, hasSelectedPlan, setPlan } = useSubscriptionStore();
+  const selectedPlan = useSelectedPlan();
+  const syncReady = useSubscriptionSyncStore((s) => s.ready);
+  const hasActiveAccess = hasPrivateAccess() || (syncReady && hasPaidAccess(selectedPlan));
   const [cycle, setCycle] = useState<BillingCycle>("annual");
   const [coupon, setCoupon] = useState("");
   const [loadingPlan, setLoadingPlan] = useState<Plan | null>(null);
@@ -64,7 +70,7 @@ function PricingContent() {
       <CheckoutSuccessSync />
       <div className="mx-auto max-w-md">
         <div className="mb-6 flex items-center justify-center">
-          {!fromDiagnostic && (
+          {!fromDiagnostic && hasActiveAccess && (
             <Link
               href="/settings"
               className="absolute left-6 font-mono text-[10px] uppercase tracking-widest text-muted hover:text-copper"
