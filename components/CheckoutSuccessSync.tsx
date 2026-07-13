@@ -11,7 +11,7 @@ type CheckoutSuccessSyncProps = {
   onSuccess?: () => void;
 };
 
-function CheckoutSuccessSyncInner({ redirectPath = "/pricing", onSuccess }: CheckoutSuccessSyncProps) {
+function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: CheckoutSuccessSyncProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useTranslation();
@@ -33,17 +33,16 @@ function CheckoutSuccessSyncInner({ redirectPath = "/pricing", onSuccess }: Chec
       if (cancelled) return;
 
       if (isCheckoutSessionVerified(result)) {
-        setPlan(result.plan, result.billingCycle);
+        setPlan(result.plan, result.billingCycle, { checkout: true });
         onSuccess?.();
-        setNotice({ type: "success", message: t("settings.checkoutSuccess") });
-      } else {
-        setNotice({
-          type: "error",
-          message: result.error ?? t("settings.checkoutVerifyError"),
-        });
+        router.replace(redirectPath, { scroll: false });
+        return;
       }
 
-      router.replace(redirectPath, { scroll: false });
+      setNotice({
+        type: "error",
+        message: result.error ?? t("settings.checkoutVerifyError"),
+      });
     }
 
     void activateSubscription();

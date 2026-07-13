@@ -9,8 +9,9 @@ import { getPipelineSteps } from "@/lib/i18n";
 import { useHairAIStore } from "@/lib/store";
 import { useTranslation } from "@/lib/useTranslation";
 import { useSelectedPlan } from "@/lib/subscriptionStore";
-import { canStartHairScan, incrementHairScanUsageForPlan, pricingUrlForScanLimit } from "@/lib/hairScanQuota";
-import { hasPrivateAccess } from "@/lib/privateAccess";
+import { pricingUrlForScanLimit, loginUrlForScan } from "@/lib/hairScanQuota";
+import { useHairScanQuota } from "@/lib/useHairScanQuota";
+import { hasPaidAccess } from "@/lib/subscriptionAccess";
 import { loadCapturedVideo, clearCapturedVideo } from "@/lib/videoStorage";
 
 export default function AnalyzingPage() {
@@ -18,6 +19,7 @@ export default function AnalyzingPage() {
   const { locale, hydrated, t } = useTranslation();
   const { answers, setProfile } = useHairAIStore();
   const plan = useSelectedPlan();
+  const { ready, canStart, requiresAuth, consume } = useHairScanQuota();
   const planRef = useRef(plan);
   planRef.current = plan;
   const [activeStep, setActiveStep] = useState(-1);
@@ -28,13 +30,17 @@ export default function AnalyzingPage() {
   const steps = getPipelineSteps(locale);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !ready) return;
 
     let cancelled = false;
 
     async function runAnalysis() {
       const activePlan = planRef.current;
-      if (!canStartHairScan(activePlan)) {
+      if (requiresAuth) {
+        router.replace(loginUrlForScan());
+        return;
+      }
+      if (!canStart) {
         router.replace(pricingUrlForScanLimit(activePlan));
         return;
       }
@@ -74,8 +80,8 @@ export default function AnalyzingPage() {
 
         setSource(result.source);
         setProfile(result.profile);
-        incrementHairScanUsageForPlan(planRef.current);
-        if (hasPrivateAccess()) {
+        await consume();
+        if (hasPaidAccess(planRef.current)) {
           router.replace("/dashboard");
         } else {
           router.replace("/pricing?from=diagnostic");
@@ -91,7 +97,7 @@ export default function AnalyzingPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, locale]);
+  }, [hydrated, locale, ready, canStart, requiresAuth]);
 
   const fallbackMessage =
     source === "mock-fallback"

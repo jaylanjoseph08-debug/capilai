@@ -16,7 +16,8 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { useTranslation } from "@/lib/useTranslation";
-import { canStartHairScan, pricingUrlForScanLimit } from "@/lib/hairScanQuota";
+import { pricingUrlForScanLimit, loginUrlForScan } from "@/lib/hairScanQuota";
+import { useHairScanQuota } from "@/lib/useHairScanQuota";
 
 export default function DashboardPage() {
   return (
@@ -30,6 +31,7 @@ function DashboardContent() {
   const router = useRouter();
   const { locale, t } = useTranslation();
   const plan = useSelectedPlan();
+  const { canStart, requiresAuth } = useHairScanQuota();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
   const metricLabels = getMetricLabels(locale);
@@ -55,7 +57,11 @@ function DashboardContent() {
   }
 
   function handleScanHairClick() {
-    if (!canStartHairScan(plan)) {
+    if (requiresAuth) {
+      router.push(loginUrlForScan());
+      return;
+    }
+    if (!canStart) {
       router.push(pricingUrlForScanLimit(plan));
       return;
     }

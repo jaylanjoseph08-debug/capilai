@@ -12,7 +12,8 @@ import { analyzeProductWithAI } from "@/lib/compatibility";
 import { useHairAIStore } from "@/lib/store";
 import { useScannerStore, type ScanRecord } from "@/lib/scannerStore";
 import { getDemoCodes } from "@/lib/i18n";
-import { hasPrivateAccess } from "@/lib/privateAccess";
+import { hasPaidAccess } from "@/lib/subscriptionAccess";
+import { useSelectedPlan } from "@/lib/subscriptionStore";
 import { useTranslation } from "@/lib/useTranslation";
 import { useRequirePaidAccess } from "@/lib/useRequirePaidAccess";
 import { BottomNav } from "@/components/ui/BottomNav";
@@ -21,6 +22,7 @@ type Phase = "scan" | "loading" | "result" | "not_found";
 
 export default function ScannerPage() {
   const router = useRouter();
+  const plan = useSelectedPlan();
   const allowed = useRequirePaidAccess();
   const { locale, t } = useTranslation();
   const { profile, answers } = useHairAIStore();
@@ -44,7 +46,7 @@ export default function ScannerPage() {
     const compatibility = await analyzeProductWithAI(product, profile, answers, locale);
     const record: ScanRecord = { product, compatibility, scannedAt: new Date().toISOString() };
     addScan(record);
-    if (hasPrivateAccess()) {
+    if (hasPaidAccess(plan)) {
       setCurrent(record);
       setPhase("result");
       return;
@@ -60,7 +62,7 @@ export default function ScannerPage() {
   }
 
   function openRecord(record: ScanRecord) {
-    if (hasPrivateAccess()) {
+    if (hasPaidAccess(plan)) {
       setCurrent(record);
       setPhase("result");
       return;

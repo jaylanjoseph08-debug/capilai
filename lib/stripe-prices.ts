@@ -39,12 +39,28 @@ const PRICE_ENV_KEYS: Record<Plan, Record<BillingCycle, readonly string[]>> = {
 
 const LIFETIME_PRICE_ENV_KEYS = ["NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_LIFETIME"] as const;
 
+export const STRIPE_PLANS: Plan[] = ["free", "premium", "pro"];
+export const STRIPE_BILLING_CYCLES: BillingCycle[] = ["monthly", "annual"];
+
 export function resolveStripePriceId(plan: Plan, billingCycle: BillingCycle): string | undefined {
   for (const key of PRICE_ENV_KEYS[plan][billingCycle]) {
     const value = process.env[key]?.trim();
     if (value) return value;
   }
   return undefined;
+}
+
+export function resolvePlanFromStripePrice(priceId: string): Plan | null {
+  for (const plan of STRIPE_PLANS) {
+    for (const cycle of STRIPE_BILLING_CYCLES) {
+      if (resolveStripePriceId(plan, cycle) === priceId) return plan;
+    }
+  }
+  return null;
+}
+
+export function isStripePriceConfigured(plan: Plan, billingCycle: BillingCycle): boolean {
+  return Boolean(resolveStripePriceId(plan, billingCycle));
 }
 
 export function getStripePriceEnvKey(plan: Plan, billingCycle: BillingCycle): string | undefined {

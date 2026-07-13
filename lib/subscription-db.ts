@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Plan, BillingCycle } from "./subscriptionStore";
-import { isLifetimeStripePriceId, resolveStripePriceId } from "./stripe-prices";
+import { isLifetimeStripePriceId, resolveStripePriceId, resolvePlanFromStripePrice } from "./stripe-prices";
 
 export type SubscriptionStatus =
   | "active"
@@ -195,12 +195,14 @@ export async function resolveUserIdFromCheckoutSession(
 
 export function resolveCheckoutPlan(session: Stripe.Checkout.Session): Plan | null {
   if (isValidPlan(session.metadata?.plan)) return session.metadata.plan;
-  return null;
+  const priceId = resolvePriceIdFromSession(session);
+  return priceId ? resolvePlanFromStripePrice(priceId) : null;
 }
 
 export function resolveCheckoutBillingCycle(session: Stripe.Checkout.Session): BillingCycle | null {
   if (isValidBillingCycle(session.metadata?.billingCycle)) return session.metadata.billingCycle;
-  return null;
+  const priceId = resolvePriceIdFromSession(session);
+  return priceId ? resolveBillingCycleFromStripePrice(priceId) : null;
 }
 
 export function resolvePriceIdFromSession(session: Stripe.Checkout.Session): string | null {

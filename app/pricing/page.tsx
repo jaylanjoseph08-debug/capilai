@@ -58,7 +58,7 @@ function PricingContent() {
     if (!result.configured) {
       setPlan(plan, cycle);
       setNotice(t("pricing.demoMode"));
-      setTimeout(() => router.push("/settings?checkout=success"), 1200);
+      setTimeout(() => router.push("/dashboard"), 1200);
       return;
     }
 

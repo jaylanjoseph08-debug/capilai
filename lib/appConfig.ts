@@ -9,7 +9,6 @@ export const STORAGE_KEYS = {
   scanner: `${APP_SLUG}-scanner-storage`,
   calendar: `${APP_SLUG}-calendar-storage`,
   subscription: `${APP_SLUG}-subscription-storage`,
-  hairScanQuota: `${APP_SLUG}-hair-scan-quota`,
   privateAccess: `${APP_SLUG}-private-access`,
 } as const;
 

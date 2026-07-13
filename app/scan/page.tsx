@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, AlertTriangle } from "lucide-react";
 import { useSelectedPlan } from "@/lib/subscriptionStore";
-import { canStartHairScan, pricingUrlForScanLimit } from "@/lib/hairScanQuota";
+import { pricingUrlForScanLimit, loginUrlForScan } from "@/lib/hairScanQuota";
+import { useHairScanQuota } from "@/lib/useHairScanQuota";
 import { useTranslation } from "@/lib/useTranslation";
 import { saveCapturedVideo } from "@/lib/videoStorage";
 
@@ -13,6 +14,7 @@ export default function ScanPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const plan = useSelectedPlan();
+  const { ready, canStart, requiresAuth } = useHairScanQuota();
   const guidance = [
     { text: t("scan.guidance0"), rotate: -22 },
     { text: t("scan.guidance1"), rotate: 0, tilt: -14 },
@@ -29,10 +31,15 @@ export default function ScanPage() {
   const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
-    if (!canStartHairScan(plan)) {
+    if (!ready) return;
+    if (requiresAuth) {
+      router.replace(loginUrlForScan());
+      return;
+    }
+    if (!canStart) {
       router.replace(pricingUrlForScanLimit(plan));
     }
-  }, [plan, router]);
+  }, [ready, canStart, requiresAuth, plan, router]);
 
   useEffect(() => {
     if (phase !== "recording") return;
@@ -118,6 +125,10 @@ export default function ScanPage() {
   }
 
   useEffect(() => () => stopStream(), []);
+
+  if (!ready) {
+    return <main className="min-h-screen bg-ink-radial" />;
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between bg-ink px-6 py-10">
