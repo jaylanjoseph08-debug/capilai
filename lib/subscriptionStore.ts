@@ -3,9 +3,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { STORAGE_KEYS } from "./appConfig";
+import type { Plan, BillingCycle } from "./plans";
 
-export type Plan = "free" | "premium" | "pro";
-export type BillingCycle = "monthly" | "annual";
+export type { Plan, BillingCycle } from "./plans";
 
 interface SubscriptionState {
   plan: Plan | null;

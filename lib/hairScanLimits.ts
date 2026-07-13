@@ -1,4 +1,4 @@
-import type { Plan } from "./subscriptionStore";
+import type { Plan } from "./plans";
 
 /** Monthly hair scan limits per subscription plan. `null` = unlimited. */
 export const HAIR_SCAN_LIMITS: Record<Plan, number | null> = {

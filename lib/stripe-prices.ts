@@ -1,5 +1,5 @@
-import type { Plan, BillingCycle } from "./subscriptionStore";
-import { isLifetimePrice } from "./pricing";
+import type { Plan, BillingCycle } from "./plans";
+import { isLifetimePrice } from "./plans";
 
 /** Env var names per plan/cycle. First match wins. */
 const PRICE_ENV_KEYS: Record<Plan, Record<BillingCycle, readonly string[]>> = {

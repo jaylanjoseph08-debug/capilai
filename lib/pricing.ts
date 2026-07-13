@@ -1,6 +1,9 @@
-import type { Plan, BillingCycle } from "./subscriptionStore";
+import type { Plan, BillingCycle } from "./plans";
 import { getPlanFeatures, PLAN_FEATURES as I18N_PLAN_FEATURES } from "./i18n";
 import type { Locale } from "./locale";
+import { isLifetimePrice } from "./plans";
+
+export type { Plan, BillingCycle } from "./plans";
 
 export const PLAN_PRICES: Record<Plan, Record<BillingCycle, number>> = {
   free: { monthly: 9.9, annual: 99 },
@@ -14,9 +17,7 @@ export const PLAN_FEATURES: Record<Plan, string[]> = I18N_PLAN_FEATURES.en;
 export { getPlanFeatures };
 
 /** Premium annual = one-time lifetime payment */
-export function isLifetimePrice(plan: Plan, cycle: BillingCycle): boolean {
-  return plan === "pro" && cycle === "annual";
-}
+export { isLifetimePrice } from "./plans";
 
 export function annualSavingsPercent(plan: Plan): number {
   const monthlyTotal = PLAN_PRICES[plan].monthly * 12;

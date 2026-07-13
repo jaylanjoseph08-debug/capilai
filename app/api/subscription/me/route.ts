@@ -6,7 +6,7 @@ import {
   isActiveSubscriptionStatus,
   type DbSubscription,
 } from "@/lib/subscription-db";
-import type { Plan, BillingCycle } from "@/lib/subscriptionStore";
+import type { Plan, BillingCycle } from "@/lib/plans";
 
 export const runtime = "nodejs";
 
@@ -40,22 +40,22 @@ function toClientResponse(row: DbSubscription | null): SubscriptionMeResponse {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isSupabaseAdminConfigured()) {
-    return NextResponse.json<SubscriptionMeResponse>({
-      configured: false,
-      hasActiveSubscription: false,
-      plan: null,
-      billingCycle: null,
-      status: null,
-    });
-  }
-
-  const authUser = await getAuthUserFromRequest(req);
-  if (!authUser) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    if (!isSupabaseAdminConfigured()) {
+      return NextResponse.json<SubscriptionMeResponse>({
+        configured: false,
+        hasActiveSubscription: false,
+        plan: null,
+        billingCycle: null,
+        status: null,
+      });
+    }
+
+    const authUser = await getAuthUserFromRequest(req);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const admin = getSupabaseAdmin();
     const row = await getSubscriptionByUserId(admin, authUser.id);
     return NextResponse.json(toClientResponse(row));

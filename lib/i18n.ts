@@ -1,6 +1,6 @@
 import { enUS, fr as frLocale } from "date-fns/locale";
 import type { Locale } from "./locale";
-import type { Plan } from "./subscriptionStore";
+import type { Plan } from "./plans";
 import type { CareEventType } from "./calendarStore";
 
 type PlanKey = "free" | "premium" | "pro";

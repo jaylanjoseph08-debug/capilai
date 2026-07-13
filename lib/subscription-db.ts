@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Plan, BillingCycle } from "./subscriptionStore";
+import type { Plan, BillingCycle } from "./plans";
 import { isLifetimeStripePriceId, resolveStripePriceId, resolvePlanFromStripePrice } from "./stripe-prices";
 
 export type SubscriptionStatus =

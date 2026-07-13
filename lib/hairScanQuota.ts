@@ -13,8 +13,12 @@ export function canStartHairScanLocally(
   if (hasPrivateAccess()) return true;
   // Allow the initial diagnostic before any plan is selected.
   if (plan === null) return true;
-  if (hasRecentCheckoutConfirmation(options?.planConfirmedAt)) return true;
   if (options?.requiresAuth) return false;
+  // Grace period: allow scans before the webhook confirms the subscription,
+  // but still enforce monthly limits from local status.
+  if (hasRecentCheckoutConfirmation(options?.planConfirmedAt)) {
+    return status?.allowed ?? true;
+  }
   return status?.allowed ?? false;
 }
 

@@ -7,7 +7,7 @@ import {
 } from "@/lib/subscription-db";
 import { consumeHairScanForUser, currentHairScanPeriodKey } from "@/lib/hair-scan-db";
 import { buildHairScanQuotaStatus, type HairScanQuotaStatus } from "@/lib/hairScanLimits";
-import type { Plan } from "@/lib/subscriptionStore";
+import type { Plan } from "@/lib/plans";
 
 export const runtime = "nodejs";
 

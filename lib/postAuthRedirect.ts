@@ -4,7 +4,7 @@ import { hasPrivateAccess } from "./privateAccess";
 import { hasPaidAccess } from "./subscriptionAccess";
 import { fetchSubscriptionFromServer, linkPendingSubscriptionFromServer } from "./subscriptionSync";
 import { isSupabaseConfigured } from "./supabase/client";
-import { getSelectedPlan, useSubscriptionStore } from "./subscriptionStore";
+import { getSelectedPlan, useSubscriptionStore, hasRecentCheckoutConfirmation } from "./subscriptionStore";
 import { useAuthStore } from "./authStore";
 
 export const POST_LOGIN_PRICING_PATH = "/pricing?from=login";
@@ -23,6 +23,11 @@ export async function resolvePostLoginPath(intendedPath = "/dashboard"): Promise
 
   if (payload.hasActiveSubscription && payload.plan) {
     setPlan(payload.plan, payload.billingCycle ?? "annual");
+    return intendedPath;
+  }
+
+  const local = useSubscriptionStore.getState();
+  if (hasRecentCheckoutConfirmation(local.planConfirmedAt)) {
     return intendedPath;
   }
 

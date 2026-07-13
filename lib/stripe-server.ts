@@ -19,10 +19,15 @@ export function getStripe(): Stripe {
     if (!secretKey) {
       throw new Error("STRIPE_SECRET_KEY is not set");
     }
-    stripeClient = new Stripe(secretKey, {
-      apiVersion: "2024-06-20",
-      typescript: true,
-    });
+    try {
+      stripeClient = new Stripe(secretKey, {
+        apiVersion: "2024-06-20",
+        typescript: true,
+      });
+    } catch (error) {
+      stripeClient = null;
+      throw error;
+    }
   }
   return stripeClient;
 }
