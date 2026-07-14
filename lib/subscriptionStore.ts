@@ -4,8 +4,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { STORAGE_KEYS } from "./appConfig";
 import type { Plan, BillingCycle } from "./plans";
+import type { SubscriptionMePayload } from "./subscriptionSync";
 
 export type { Plan, BillingCycle } from "./plans";
+export { useSelectedPlan } from "./useSelectedPlan";
 
 interface SubscriptionState {
   plan: Plan | null;
@@ -36,8 +38,14 @@ export function getSelectedPlan(plan: Plan | null, hasSelectedPlan: boolean): Pl
   return hasSelectedPlan ? plan : null;
 }
 
-export function useSelectedPlan(): Plan | null {
-  return useSubscriptionStore((s) => getSelectedPlan(s.plan, s.hasSelectedPlan));
+/** Mirror server subscription into the local cache (UI display only). */
+export function mirrorServerPlanToLocal(payload: SubscriptionMePayload | null): void {
+  const { setPlan, cancelSubscription } = useSubscriptionStore.getState();
+  if (payload?.hasActiveSubscription && payload.plan) {
+    setPlan(payload.plan, payload.billingCycle ?? "annual");
+    return;
+  }
+  cancelSubscription();
 }
 
 export const PLAN_LABEL: Record<Plan, string> = {

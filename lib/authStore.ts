@@ -10,14 +10,19 @@ export interface AuthUser {
   provider: "email" | "google" | "apple";
 }
 
-type AuthResult = { error?: string };
+type AuthResult = {
+  error?: string;
+  needsEmailConfirmation?: boolean;
+  emailSent?: boolean;
+};
 
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isConfigured: boolean;
-  signUp: (name: string, email: string, password: string) => Promise<AuthResult>;
+  signUp: (name: string, email: string, password: string, nextPath?: string) => Promise<AuthResult>;
+  resendSignupConfirmation: (email: string, nextPath?: string) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signInWithProvider: (provider: "google" | "apple", nextPath?: string) => Promise<AuthResult>;
   updateProfile: (fields: Partial<Pick<AuthUser, "name" | "email">>) => Promise<AuthResult>;
@@ -55,25 +60,70 @@ export const useAuthStore = create<AuthState>()((set) => ({
     return () => subscription.unsubscribe();
   },
 
-  signUp: async (name, email, password) => {
+  signUp: async (name, email, password, nextPath = "/dashboard") => {
     if (!isSupabaseConfigured()) return { error: "not_configured" };
     const supabase = getSupabase();
-    const { error } = await supabase.auth.signUp({
+    const emailRedirectTo = getAuthRedirectUrl(nextPath);
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: name, name },
+        emailRedirectTo,
       },
     });
     if (error) return { error: error.message };
-    return {};
+
+    if (data.user?.identities?.length === 0) {
+      return { error: "already_registered" };
+    }
+
+    if (data.session?.user) {
+      const user = mapSupabaseUser(data.session.user);
+      set({ user, isAuthenticated: Boolean(user), isLoading: false, isConfigured: true });
+      return {};
+    }
+
+    if (data.user && !data.session) {
+      let emailSent = Boolean(data.user.confirmation_sent_at);
+      if (!emailSent) {
+        const resendResult = await supabase.auth.resend({
+          type: "signup",
+          email,
+          options: { emailRedirectTo },
+        });
+        if (!resendResult.error) {
+          emailSent = true;
+        } else {
+          return { error: resendResult.error.message };
+        }
+      }
+
+      return { needsEmailConfirmation: true, emailSent };
+    }
+
+    return { error: "auth_failed" };
+  },
+
+  resendSignupConfirmation: async (email, nextPath = "/dashboard") => {
+    if (!isSupabaseConfigured()) return { error: "not_configured" };
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: getAuthRedirectUrl(nextPath) },
+    });
+    if (error) return { error: error.message };
+    return { needsEmailConfirmation: true, emailSent: true };
   },
 
   signIn: async (email, password) => {
     if (!isSupabaseConfigured()) return { error: "not_configured" };
     const supabase = getSupabase();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
+    const user = mapSupabaseUser(data.user);
+    set({ user, isAuthenticated: Boolean(user), isLoading: false, isConfigured: true });
     return {};
   },
 

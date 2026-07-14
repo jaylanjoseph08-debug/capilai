@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { StrandGauge } from "@/components/ui/StrandGauge";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { LanguageToggle } from "@/components/ui/LanguageToggle";
-import { resolveProfileEntryPath } from "@/lib/postAuthRedirect";
+import { resolveDiagnosisEntryPath, resolveProfileEntryPath } from "@/lib/postAuthRedirect";
 import { useTranslation } from "@/lib/useTranslation";
 
 export default function LandingPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [profileLoading, setProfileLoading] = useState(false);
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
 
   async function handleProfileClick() {
     setProfileLoading(true);
@@ -22,6 +23,12 @@ export default function LandingPage() {
     } finally {
       setProfileLoading(false);
     }
+  }
+
+  function handleStartDiagnosis() {
+    setDiagnosisLoading(true);
+    router.push(resolveDiagnosisEntryPath());
+    setDiagnosisLoading(false);
   }
 
   return (
@@ -51,12 +58,14 @@ export default function LandingPage() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <Link
-            href="/onboarding"
-            className="flex h-14 items-center justify-center rounded-full bg-copper-gradient font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98]"
+          <button
+            type="button"
+            onClick={handleStartDiagnosis}
+            disabled={diagnosisLoading}
+            className="flex h-14 items-center justify-center rounded-full bg-copper-gradient font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98] disabled:opacity-60"
           >
-            {t("home.ctaStart")}
-          </Link>
+            {diagnosisLoading ? "…" : t("home.ctaStart")}
+          </button>
           <Link
             href="/login"
             className="flex h-14 items-center justify-center rounded-full border border-line font-body text-sm text-cream/80 transition hover:border-copper/50"

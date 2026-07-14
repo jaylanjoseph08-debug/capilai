@@ -34,6 +34,12 @@ export async function POST(req: NextRequest) {
   }
 
   const authUser = await getAuthUserFromRequest(req);
+  if (!authUser) {
+    return NextResponse.json(
+      { configured: true, error: "Authentication required", code: "AUTH_REQUIRED" },
+      { status: 401 }
+    );
+  }
 
   const priceId = resolveStripePriceId(plan, billingCycle);
   if (!priceId) {
@@ -66,8 +72,6 @@ export async function POST(req: NextRequest) {
     if (authUser) {
       sessionParams.metadata!.supabase_user_id = authUser.id;
       sessionParams.client_reference_id = authUser.id;
-    } else if (mode === "payment") {
-      sessionParams.customer_creation = "always";
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

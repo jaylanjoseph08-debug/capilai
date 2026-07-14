@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import { resolvePostLoginPath } from "@/lib/postAuthRedirect";
+import { isDiagnosisOnboardingPath, resolvePostLoginPath } from "@/lib/postAuthRedirect";
 import { useTranslation } from "@/lib/useTranslation";
 
 export default function AuthCallbackPage() {
@@ -39,13 +39,22 @@ function AuthCallbackContent() {
 
       const supabase = getSupabase();
       const code = searchParams.get("code");
+      const tokenHash = searchParams.get("token_hash");
+      const otpType = searchParams.get("type");
       const next = searchParams.get("next") || "/dashboard";
 
       try {
         if (code) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) throw exchangeError;
+        } else if (tokenHash && otpType) {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: otpType as "signup" | "email" | "recovery" | "invite" | "magiclink" | "email_change",
+          });
+          if (verifyError) throw verifyError;
         } else {
+          await new Promise((resolve) => setTimeout(resolve, 150));
           const { error: sessionError } = await supabase.auth.getSession();
           if (sessionError) throw sessionError;
         }
@@ -55,7 +64,12 @@ function AuthCallbackContent() {
         } = await supabase.auth.getSession();
 
         if (!session) {
-          throw new Error("No session after OAuth callback");
+          throw new Error("No session after auth callback");
+        }
+
+        if (isDiagnosisOnboardingPath(next)) {
+          if (!cancelled) router.replace(next);
+          return;
         }
 
         const path = await resolvePostLoginPath(next);

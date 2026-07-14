@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, AlertTriangle } from "lucide-react";
-import { useSelectedPlan } from "@/lib/subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
 import { pricingUrlForScanLimit, loginUrlForScan } from "@/lib/hairScanQuota";
 import { useHairScanQuota } from "@/lib/useHairScanQuota";
 import { useTranslation } from "@/lib/useTranslation";

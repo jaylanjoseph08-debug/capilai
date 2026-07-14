@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 import { StepShell } from "@/components/ui/StepShell";
 import { getQuestions } from "@/lib/questions";
 import { useHairAIStore } from "@/lib/store";
 import { useTranslation } from "@/lib/useTranslation";
+import { useAuthStore } from "@/lib/authStore";
+import { DIAGNOSIS_SIGNUP_PATH } from "@/lib/postAuthRedirect";
+import { hasPrivateAccess } from "@/lib/privateAccess";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -15,6 +19,25 @@ export default function OnboardingPage() {
   const questions = getQuestions(locale);
   const [step, setStep] = useState(0);
   const { answers, setAnswer } = useHairAIStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const isConfigured = useAuthStore((s) => s.isConfigured);
+
+  useEffect(() => {
+    if (hasPrivateAccess()) return;
+    if (isLoading) return;
+    if (isConfigured && !isAuthenticated) {
+      router.replace(DIAGNOSIS_SIGNUP_PATH);
+    }
+  }, [isAuthenticated, isConfigured, isLoading, router]);
+
+  if (!hasPrivateAccess() && isConfigured && (isLoading || !isAuthenticated)) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-ink-radial px-6">
+        <p className="font-body text-sm text-muted">…</p>
+      </main>
+    );
+  }
 
   const question = questions[step];
   const isLast = step === questions.length - 1;

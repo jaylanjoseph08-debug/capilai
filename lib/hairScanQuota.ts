@@ -1,24 +1,18 @@
 import type { Plan } from "./subscriptionStore";
 import { hasPrivateAccess } from "./privateAccess";
 import type { HairScanQuotaStatus } from "./hairScanLimits";
-import { hasRecentCheckoutConfirmation } from "./subscriptionStore";
 
 export { HAIR_SCAN_LIMITS, buildHairScanQuotaStatus, type HairScanQuotaStatus } from "./hairScanLimits";
 
 export function canStartHairScanLocally(
   plan: Plan | null,
   status: HairScanQuotaStatus | null,
-  options?: { planConfirmedAt?: number | null; requiresAuth?: boolean }
+  options?: { requiresAuth?: boolean }
 ): boolean {
   if (hasPrivateAccess()) return true;
-  // Allow the initial diagnostic before any plan is selected.
-  if (plan === null) return true;
   if (options?.requiresAuth) return false;
-  // Grace period: allow scans before the webhook confirms the subscription,
-  // but still enforce monthly limits from local status.
-  if (hasRecentCheckoutConfirmation(options?.planConfirmedAt)) {
-    return status?.allowed ?? true;
-  }
+  // Initial diagnostic before any server subscription.
+  if (plan === null) return true;
   return status?.allowed ?? false;
 }
 
@@ -31,9 +25,9 @@ export function getUpgradePlan(plan: Plan | null): Plan | null {
 }
 
 export function pricingUrlForScanLimit(plan: Plan | null): string {
-  if (plan === null) return "/pricing";
+  if (plan === null) return "/pricing?from=diagnostic";
   const upgrade = getUpgradePlan(plan);
-  if (!upgrade) return "/pricing";
+  if (!upgrade) return "/pricing?from=limit";
   return `/pricing?from=limit&upgrade=${upgrade}`;
 }
 

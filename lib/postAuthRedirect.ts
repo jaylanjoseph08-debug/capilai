@@ -1,37 +1,46 @@
 "use client";
 
 import { hasPrivateAccess } from "./privateAccess";
-import { hasPaidAccess } from "./subscriptionAccess";
-import { fetchSubscriptionFromServer, linkPendingSubscriptionFromServer } from "./subscriptionSync";
+import { hasPaidAccess, hasServerActiveSubscription } from "./subscriptionAccess";
+import {
+  mirrorServerPlanToLocal,
+  syncSubscriptionFromServer,
+} from "./subscriptionSync";
 import { isSupabaseConfigured } from "./supabase/client";
-import { getSelectedPlan, useSubscriptionStore, hasRecentCheckoutConfirmation } from "./subscriptionStore";
+import { getSelectedPlan, useSubscriptionStore } from "./subscriptionStore";
 import { useAuthStore } from "./authStore";
 
 export const POST_LOGIN_PRICING_PATH = "/pricing?from=login";
 export const PROFILE_PRICING_PATH = "/pricing?from=profile";
+export const DIAGNOSIS_ONBOARDING_PATH = "/onboarding";
+export const DIAGNOSIS_SIGNUP_PATH = "/signup?from=diagnosis";
+
+export function isDiagnosisOnboardingPath(path: string | null | undefined): boolean {
+  return path === DIAGNOSIS_ONBOARDING_PATH;
+}
+
+/** Where "Start my diagnosis" should send the user (account first, then questionnaire). */
+export function resolveDiagnosisEntryPath(): string {
+  if (hasPrivateAccess()) return DIAGNOSIS_ONBOARDING_PATH;
+
+  const { isAuthenticated } = useAuthStore.getState();
+  if (isAuthenticated) return DIAGNOSIS_ONBOARDING_PATH;
+
+  return DIAGNOSIS_SIGNUP_PATH;
+}
 
 /** Resolves where to send the user right after a successful login. */
 export async function resolvePostLoginPath(intendedPath = "/dashboard"): Promise<string> {
   if (hasPrivateAccess()) return intendedPath;
   if (!isSupabaseConfigured()) return intendedPath;
 
-  await linkPendingSubscriptionFromServer();
-  const payload = await fetchSubscriptionFromServer();
-  const { setPlan, cancelSubscription } = useSubscriptionStore.getState();
+  const payload = await syncSubscriptionFromServer();
+  mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);
 
-  if (!payload?.configured) return intendedPath;
-
-  if (payload.hasActiveSubscription && payload.plan) {
-    setPlan(payload.plan, payload.billingCycle ?? "annual");
+  if (hasServerActiveSubscription(payload)) {
     return intendedPath;
   }
 
-  const local = useSubscriptionStore.getState();
-  if (hasRecentCheckoutConfirmation(local.planConfirmedAt)) {
-    return intendedPath;
-  }
-
-  cancelSubscription();
   return POST_LOGIN_PRICING_PATH;
 }
 

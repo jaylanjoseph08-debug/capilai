@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
-import { useSubscriptionStore, useSelectedPlan, type Plan, type BillingCycle } from "@/lib/subscriptionStore";
+import { useSubscriptionStore, type Plan, type BillingCycle } from "@/lib/subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
+import { useAuthStore } from "@/lib/authStore";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { hasPaidAccess } from "@/lib/subscriptionAccess";
 import { hasPrivateAccess } from "@/lib/privateAccess";
@@ -35,6 +38,7 @@ function PricingContent() {
     upgradeParam === "premium" || upgradeParam === "pro" ? upgradeParam : null;
   const { plan: currentPlan, hasSelectedPlan, setPlan } = useSubscriptionStore();
   const selectedPlan = useSelectedPlan();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
   const hasActiveAccess = hasPrivateAccess() || (syncReady && hasPaidAccess(selectedPlan));
   const [cycle, setCycle] = useState<BillingCycle>("annual");
@@ -45,6 +49,12 @@ function PricingContent() {
   const discount = coupon.trim().toUpperCase() === "MECHE10" ? 0.1 : 0;
 
   async function handleChoose(plan: Plan) {
+    if (isSupabaseConfigured() && !isAuthenticated) {
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      return;
+    }
+
     setLoadingPlan(plan);
     setNotice("");
     const result = await startCheckout(plan, cycle);
@@ -52,6 +62,12 @@ function PricingContent() {
 
     if (isCheckoutSuccess(result)) {
       window.location.href = result.url;
+      return;
+    }
+
+    if (result.code === "AUTH_REQUIRED") {
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      router.push(`/login?next=${encodeURIComponent(returnTo)}`);
       return;
     }
 

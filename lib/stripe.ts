@@ -37,7 +37,7 @@ export async function startCheckout(plan: Plan, billingCycle: BillingCycle): Pro
       return {
         configured: res.status !== 501,
         error: data.error ?? `HTTP ${res.status}`,
-        code: "CHECKOUT_FAILED",
+        code: data.code ?? (res.status === 401 ? "AUTH_REQUIRED" : "CHECKOUT_FAILED"),
       };
     }
 

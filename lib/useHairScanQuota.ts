@@ -9,12 +9,13 @@ import {
 } from "./hairScanLimits";
 import { canStartHairScanLocally } from "./hairScanQuota";
 import { consumeHairScanOnServer, fetchHairScanQuotaFromServer } from "./hairScanQuotaSync";
-import { useSelectedPlan, useSubscriptionStore, hasRecentCheckoutConfirmation } from "./subscriptionStore";
+import { useSelectedPlan } from "./useSelectedPlan";
+import { useSubscriptionSyncStore } from "./subscriptionSyncStore";
 
 export function useHairScanQuota() {
   const plan = useSelectedPlan();
-  const planConfirmedAt = useSubscriptionStore((s) => s.planConfirmedAt);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const syncReady = useSubscriptionSyncStore((s) => s.ready);
   const [status, setStatus] = useState<HairScanQuotaStatus | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -25,20 +26,18 @@ export function useHairScanQuota() {
       return;
     }
 
+    if (!isAuthenticated) {
+      setStatus({ allowed: plan === null, scansUsed: 0, scansLimit: null, remaining: null });
+      setReady(true);
+      return;
+    }
+
+    if (!syncReady) {
+      return;
+    }
+
     if (plan === null) {
       setStatus({ allowed: true, scansUsed: 0, scansLimit: null, remaining: null });
-      setReady(true);
-      return;
-    }
-
-    if (hasRecentCheckoutConfirmation(planConfirmedAt)) {
-      setStatus(buildHairScanQuotaStatus(plan, 0));
-      setReady(true);
-      return;
-    }
-
-    if (!isAuthenticated) {
-      setStatus(buildHairScanQuotaStatus(plan, 0));
       setReady(true);
       return;
     }
@@ -50,28 +49,22 @@ export function useHairScanQuota() {
       setStatus(buildHairScanQuotaStatus(plan, 0));
     }
     setReady(true);
-  }, [plan, planConfirmedAt, isAuthenticated]);
+  }, [plan, isAuthenticated, syncReady]);
 
   useEffect(() => {
     setReady(false);
     void refresh();
   }, [refresh]);
 
-  const requiresAuth = Boolean(plan) && !isAuthenticated && !hasRecentCheckoutConfirmation(planConfirmedAt);
+  const requiresAuth = !hasPrivateAccess() && !isAuthenticated;
 
   const canStart = ready
-    ? canStartHairScanLocally(plan, status, { planConfirmedAt, requiresAuth })
+    ? canStartHairScanLocally(plan, status, { requiresAuth })
     : false;
 
   const consume = useCallback(async (): Promise<HairScanQuotaStatus | null> => {
     if (plan === null || hasPrivateAccess()) {
       return status;
-    }
-
-    if (hasRecentCheckoutConfirmation(planConfirmedAt)) {
-      const next = buildHairScanQuotaStatus(plan, (status?.scansUsed ?? 0) + 1);
-      setStatus(next);
-      return next;
     }
 
     if (!isAuthenticated) {
@@ -85,7 +78,7 @@ export function useHairScanQuota() {
     }
 
     return status;
-  }, [plan, planConfirmedAt, isAuthenticated, status]);
+  }, [plan, isAuthenticated, status]);
 
   return {
     plan,

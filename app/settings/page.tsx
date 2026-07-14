@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, ChevronRight } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
+import { deleteProfileOnServer } from "@/lib/hairProfileSync";
 import { useHairAIStore } from "@/lib/store";
 import { useScannerStore } from "@/lib/scannerStore";
 import { useCalendarStore } from "@/lib/calendarStore";
@@ -216,9 +217,10 @@ function ParametresTab() {
   const calendarStore = useCalendarStore();
   const authStore = useAuthStore();
 
-  function resetAll() {
+  async function resetAll() {
     if (!window.confirm(t("settings.resetConfirm"))) return;
     hairStore.reset();
+    await deleteProfileOnServer();
     calendarStore.events.forEach((e) => calendarStore.removeEvent(e.id));
     scannerStore.closet.forEach((r) => scannerStore.removeFromCloset(r.product.barcode));
     authStore.signOut();

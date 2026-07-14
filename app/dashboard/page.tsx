@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { ScanLine, PackagePlus, CalendarDays, ScrollText, Camera, History } from "lucide-react";
 import { useHairAIStore } from "@/lib/store";
 import { useAuthStore } from "@/lib/authStore";
-import { useSelectedPlan } from "@/lib/subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
+import { useProfileSyncStore } from "@/lib/profileSyncStore";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { hasPaidAccess } from "@/lib/subscriptionAccess";
 import { getMetricLabels } from "@/lib/i18n";
 import { getProfileForLocale } from "@/lib/profileDisplay";
@@ -34,6 +36,8 @@ function DashboardContent() {
   const { canStart, requiresAuth } = useHairScanQuota();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
+  const profileSyncReady = useProfileSyncStore((s) => s.ready);
+  const waitingForProfile = isSupabaseConfigured() && isAuthenticated && !profileSyncReady;
   const metricLabels = getMetricLabels(locale);
   const { profile: storedProfile, answers } = useHairAIStore();
   const profile = useMemo(
@@ -48,7 +52,7 @@ function DashboardContent() {
     }
   }, [profile, plan, syncReady, router]);
 
-  if (!syncReady) {
+  if (!syncReady || waitingForProfile) {
     return null;
   }
 

@@ -2,7 +2,12 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSubscriptionStore } from "@/lib/subscriptionStore";
+import { hasServerActiveSubscription } from "@/lib/subscriptionAccess";
+import {
+  mirrorServerPlanToLocal,
+  pollSubscriptionUntilActive,
+} from "@/lib/subscriptionSync";
+import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { verifyCheckoutSession, isCheckoutSessionVerified } from "@/lib/stripe";
 import { useTranslation } from "@/lib/useTranslation";
 
@@ -15,8 +20,10 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useTranslation();
-  const setPlan = useSubscriptionStore((s) => s.setPlan);
+  const setServerSubscription = useSubscriptionSyncStore((s) => s.setServerSubscription);
+  const markReady = useSubscriptionSyncStore((s) => s.markReady);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const processedSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -29,11 +36,32 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
     let cancelled = false;
 
     async function activateSubscription() {
-      const result = await verifyCheckoutSession(sessionId!);
+      setSyncing(true);
+      setNotice(null);
+
+      const verified = await verifyCheckoutSession(sessionId!);
       if (cancelled) return;
 
-      if (isCheckoutSessionVerified(result)) {
-        setPlan(result.plan, result.billingCycle, { checkout: true });
+      if (!isCheckoutSessionVerified(verified)) {
+        setSyncing(false);
+        setNotice({
+          type: "error",
+          message: verified.error ?? t("settings.checkoutVerifyError"),
+        });
+        return;
+      }
+
+      setNotice({ type: "success", message: t("pricing.checkoutActivating") });
+
+      const payload = await pollSubscriptionUntilActive();
+      if (cancelled) return;
+
+      setSyncing(false);
+
+      if (hasServerActiveSubscription(payload)) {
+        setServerSubscription(payload);
+        mirrorServerPlanToLocal(payload);
+        markReady();
         onSuccess?.();
         router.replace(redirectPath, { scroll: false });
         return;
@@ -41,7 +69,7 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
 
       setNotice({
         type: "error",
-        message: result.error ?? t("settings.checkoutVerifyError"),
+        message: t("pricing.checkoutSyncFailed"),
       });
     }
 
@@ -49,20 +77,20 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
     return () => {
       cancelled = true;
     };
-  }, [searchParams, setPlan, onSuccess, router, redirectPath, t]);
+  }, [searchParams, setServerSubscription, markReady, onSuccess, router, redirectPath, t]);
 
-  if (!notice) return null;
+  if (!notice && !syncing) return null;
 
   return (
     <div className="mx-auto mb-4 max-w-md">
       <p
         className={`rounded-2xl border p-3 text-center font-body text-xs ${
-          notice.type === "success"
-            ? "border-copper/30 bg-copper/10 text-cream/90"
-            : "border-copper/40 bg-copper/5 text-copper-light"
+          notice?.type === "error"
+            ? "border-copper/40 bg-copper/5 text-copper-light"
+            : "border-copper/30 bg-copper/10 text-cream/90"
         }`}
       >
-        {notice.message}
+        {syncing && !notice ? t("pricing.checkoutActivating") : notice?.message}
       </p>
     </div>
   );

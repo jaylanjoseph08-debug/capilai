@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { STORAGE_KEYS, STORAGE_MIGRATIONS } from "@/lib/appConfig";
 import { AuthProvider } from "@/components/AuthProvider";
 import { SubscriptionSync } from "@/components/SubscriptionSync";
+import { ProfileSync } from "@/components/ProfileSync";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ export default function RootLayout({
       <body className="font-body bg-ink text-cream antialiased">
         <AuthProvider>
           <SubscriptionSync />
+          <ProfileSync />
           {children}
         </AuthProvider>
       </body>

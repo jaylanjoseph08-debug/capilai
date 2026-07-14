@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/lib/authStore";
-import { resolvePostLoginPath } from "@/lib/postAuthRedirect";
+import { isDiagnosisOnboardingPath, resolvePostLoginPath } from "@/lib/postAuthRedirect";
 import { OAuthButton } from "@/components/ui/BrandMarks";
 import { useTranslation } from "@/lib/useTranslation";
 
@@ -14,7 +14,24 @@ function resolveAuthError(t: (key: import("@/lib/i18n").TranslationKey) => strin
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginFallback() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-ink-radial px-6">
+      <p className="font-body text-sm text-muted">…</p>
+    </main>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useTranslation();
   const signIn = useAuthStore((s) => s.signIn);
   const isConfigured = useAuthStore((s) => s.isConfigured);
@@ -22,6 +39,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const nextPath = searchParams.get("next") || "/dashboard";
+
+  async function resolveDestination(): Promise<string> {
+    if (isDiagnosisOnboardingPath(nextPath)) return nextPath;
+    return resolvePostLoginPath(nextPath);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,7 +71,7 @@ export default function LoginPage() {
       setError(resolveAuthError(t, result.error));
       return;
     }
-    const path = await resolvePostLoginPath("/dashboard");
+    const path = await resolveDestination();
     router.push(path);
   }
 
@@ -99,14 +123,21 @@ export default function LoginPage() {
           <OAuthButton
             provider="google"
             label={t("auth.login.continueGoogle")}
-            nextPath="/dashboard"
+            nextPath={nextPath}
             onError={(code) => setError(resolveAuthError(t, code))}
           />
         </div>
 
         <p className="mt-8 text-center font-body text-sm text-muted">
           {t("auth.login.noAccount")}{" "}
-          <Link href="/signup" className="text-copper-light underline underline-offset-2">
+          <Link
+            href={
+              isDiagnosisOnboardingPath(nextPath)
+                ? "/signup?from=diagnosis"
+                : "/signup"
+            }
+            className="text-copper-light underline underline-offset-2"
+          >
             {t("auth.login.createAccount")}
           </Link>
         </p>

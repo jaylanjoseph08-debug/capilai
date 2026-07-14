@@ -31,8 +31,19 @@ export function getSupabase(): SupabaseClient {
   return browserClient;
 }
 
+export function getSiteOrigin(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+
+  return "http://localhost:3000";
+}
+
+/** Canonical callback URL for OAuth and signup confirmation emails. */
 export function getAuthRedirectUrl(nextPath = "/dashboard"): string {
-  if (typeof window === "undefined") return "/auth/callback";
   const next = encodeURIComponent(nextPath);
-  return `${window.location.origin}/auth/callback?next=${next}`;
+  return `${getSiteOrigin()}/auth/callback?next=${next}`;
 }

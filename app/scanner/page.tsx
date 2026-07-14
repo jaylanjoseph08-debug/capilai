@@ -13,7 +13,7 @@ import { useHairAIStore } from "@/lib/store";
 import { useScannerStore, type ScanRecord } from "@/lib/scannerStore";
 import { getDemoCodes } from "@/lib/i18n";
 import { hasPaidAccess } from "@/lib/subscriptionAccess";
-import { useSelectedPlan } from "@/lib/subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
 import { useTranslation } from "@/lib/useTranslation";
 import { useRequirePaidAccess } from "@/lib/useRequirePaidAccess";
 import { BottomNav } from "@/components/ui/BottomNav";

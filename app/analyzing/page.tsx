@@ -8,11 +8,12 @@ import { runAnalysisPipeline, type AnalysisSource } from "@/lib/mockAnalysis";
 import { getPipelineSteps } from "@/lib/i18n";
 import { useHairAIStore } from "@/lib/store";
 import { useTranslation } from "@/lib/useTranslation";
-import { useSelectedPlan } from "@/lib/subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
 import { pricingUrlForScanLimit, loginUrlForScan } from "@/lib/hairScanQuota";
 import { useHairScanQuota } from "@/lib/useHairScanQuota";
 import { hasPaidAccess } from "@/lib/subscriptionAccess";
 import { loadCapturedVideo, clearCapturedVideo } from "@/lib/videoStorage";
+import { saveProfileToServer } from "@/lib/hairProfileSync";
 
 export default function AnalyzingPage() {
   const router = useRouter();
@@ -80,6 +81,12 @@ export default function AnalyzingPage() {
 
         setSource(result.source);
         setProfile(result.profile);
+        const snapshot = useHairAIStore.getState();
+        await saveProfileToServer({
+          answers: snapshot.answers,
+          profile: snapshot.profile,
+          history: snapshot.history,
+        });
         await consume();
         if (hasPaidAccess(planRef.current)) {
           router.replace("/dashboard");

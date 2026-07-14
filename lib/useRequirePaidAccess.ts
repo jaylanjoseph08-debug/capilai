@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSelectedPlan } from "./subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
 import { useSubscriptionSyncStore } from "./subscriptionSyncStore";
 import { hasPaidAccess } from "./subscriptionAccess";
 

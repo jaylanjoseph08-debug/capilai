@@ -13,6 +13,11 @@ interface HairAIState {
   history: HairProfile[];
   setAnswer: (key: string, value: string | string[] | number) => void;
   setProfile: (profile: HairProfile) => void;
+  replaceFromServer: (data: {
+    answers: Answers;
+    profile: HairProfile | null;
+    history: HairProfile[];
+  }) => void;
   reset: () => void;
 }
 
@@ -29,6 +34,12 @@ export const useHairAIStore = create<HairAIState>()(
           profile,
           history: [...state.history, profile],
         })),
+      replaceFromServer: (data) =>
+        set({
+          answers: data.answers,
+          profile: data.profile,
+          history: data.history,
+        }),
       reset: () => set({ answers: {}, profile: null, history: [] }),
     }),
     { name: STORAGE_KEYS.profile }
