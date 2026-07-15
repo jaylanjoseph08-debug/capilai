@@ -5,6 +5,7 @@ import {
   checkoutEmailFromSession,
   getSubscriptionByUserId,
   isActiveSubscriptionStatus,
+  linkPendingSubscriptionForEmail,
   mapStripeSubscriptionStatus,
   resolveBillingCycleFromStripePrice,
   resolveCheckoutBillingCycle,
@@ -166,6 +167,16 @@ export async function syncSubscriptionFromCheckoutSession(
     await admin.from("pending_subscriptions").delete().eq("email", normalizeEmail(checkoutEmail));
   }
 
+  if (stripeCustomerId) {
+    try {
+      await stripe.customers.update(stripeCustomerId, {
+        metadata: { supabase_user_id: userId },
+      });
+    } catch (error) {
+      console.warn("[stripe-subscription-sync] customer metadata update failed", error);
+    }
+  }
+
   return { ok: true };
 }
 
@@ -223,12 +234,76 @@ async function refreshExistingActiveSubscription(
   }
 }
 
-/**
- * Fallback when the Stripe webhook did not write Supabase.
- * Looks up paid checkouts / active subscriptions in Stripe by billing email.
- * Always prefers the newest active Stripe subscription over a stale DB row.
- */
-export async function syncSubscriptionFromStripeForEmail(
+function escapeStripeSearchValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+/** Paid checkout sessions linked to this Capil AI account (works when Apple Pay uses another email). */
+async function findCompletedCheckoutSessionsForUser(
+  stripe: Stripe,
+  userId: string
+): Promise<Stripe.Checkout.Session[]> {
+  const escapedUserId = escapeStripeSearchValue(userId);
+  const byId = new Map<string, Stripe.Checkout.Session>();
+
+  async function collect(query: string) {
+    try {
+      const result = await stripe.checkout.sessions.search({ query, limit: 20 });
+      for (const session of result.data) {
+        byId.set(session.id, session);
+      }
+    } catch (error) {
+      console.warn("[stripe-subscription-sync] checkout session search failed", query, error);
+    }
+  }
+
+  await collect(`metadata['supabase_user_id']:'${escapedUserId}' AND status:'complete'`);
+  await collect(`client_reference_id:'${escapedUserId}' AND status:'complete'`);
+
+  return [...byId.values()].sort((a, b) => b.created - a.created);
+}
+
+async function syncSubscriptionsFromStripeCustomersForUser(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string
+): Promise<boolean> {
+  const escapedUserId = escapeStripeSearchValue(userId);
+
+  try {
+    const result = await stripe.customers.search({
+      query: `metadata['supabase_user_id']:'${escapedUserId}'`,
+      limit: 10,
+    });
+
+    let newestActiveSubscription: Stripe.Subscription | null = null;
+
+    for (const customer of result.data) {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "all",
+        limit: 20,
+      });
+
+      for (const subscription of subscriptions.data) {
+        if (subscription.status !== "active" && subscription.status !== "trialing") continue;
+        if (!newestActiveSubscription || subscription.created > newestActiveSubscription.created) {
+          newestActiveSubscription = subscription;
+        }
+      }
+    }
+
+    if (newestActiveSubscription) {
+      return upsertFromStripeSubscription(admin, userId, newestActiveSubscription);
+    }
+  } catch (error) {
+    console.warn("[stripe-subscription-sync] customer search failed", error);
+  }
+
+  return false;
+}
+
+async function syncFromStripeCustomersByEmail(
   admin: SupabaseClient,
   stripe: Stripe,
   userId: string,
@@ -276,5 +351,107 @@ export async function syncSubscriptionFromStripeForEmail(
     }
   }
 
+  return false;
+}
+
+async function syncActiveSubscriptionFromCustomer(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string,
+  customerId: string
+): Promise<boolean> {
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+  });
+
+  let newestActiveSubscription: Stripe.Subscription | null = null;
+  for (const subscription of subscriptions.data) {
+    if (subscription.status !== "active" && subscription.status !== "trialing") continue;
+    if (!newestActiveSubscription || subscription.created > newestActiveSubscription.created) {
+      newestActiveSubscription = subscription;
+    }
+  }
+
+  if (!newestActiveSubscription) return false;
+
+  try {
+    await stripe.customers.update(customerId, {
+      metadata: { supabase_user_id: userId },
+    });
+  } catch (error) {
+    console.warn("[stripe-subscription-sync] customer metadata update failed", error);
+  }
+
+  return upsertFromStripeSubscription(admin, userId, newestActiveSubscription);
+}
+
+/** Link pending rows saved under Apple Pay / billing emails from this user's checkouts. */
+export async function linkPendingFromUserCheckoutSessions(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string,
+  authEmail: string
+): Promise<boolean> {
+  if (await linkPendingSubscriptionForEmail(admin, userId, authEmail)) return true;
+
+  const checkoutSessions = await findCompletedCheckoutSessionsForUser(stripe, userId);
+  for (const session of checkoutSessions) {
+    const billingEmail = checkoutEmailFromSession(session);
+    if (billingEmail && (await linkPendingSubscriptionForEmail(admin, userId, billingEmail))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Fallback when the Stripe webhook did not write Supabase.
+ * Finds subscriptions by Capil AI user id first (Apple Pay / different billing email),
+ * then by account email.
+ */
+export async function syncSubscriptionFromStripeForUser(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string,
+  email: string
+): Promise<boolean> {
+  const checkoutSessions = await findCompletedCheckoutSessionsForUser(stripe, userId);
+  for (const session of checkoutSessions) {
+    if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+      continue;
+    }
+    const synced = await syncSubscriptionFromCheckoutSession(admin, stripe, userId, session.id, email);
+    if (synced.ok) return true;
+  }
+
+  for (const session of checkoutSessions) {
+    const customerId =
+      typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+    if (customerId && (await syncActiveSubscriptionFromCustomer(admin, stripe, userId, customerId))) {
+      return true;
+    }
+  }
+
+  if (await syncSubscriptionsFromStripeCustomersForUser(admin, stripe, userId)) {
+    return true;
+  }
+
+  if (await syncFromStripeCustomersByEmail(admin, stripe, userId, email)) {
+    return true;
+  }
+
   return refreshExistingActiveSubscription(admin, stripe, userId);
+}
+
+/** @deprecated Prefer syncSubscriptionFromStripeForUser */
+export async function syncSubscriptionFromStripeForEmail(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string,
+  email: string
+): Promise<boolean> {
+  return syncSubscriptionFromStripeForUser(admin, stripe, userId, email);
 }

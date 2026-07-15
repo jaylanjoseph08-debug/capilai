@@ -85,6 +85,9 @@ export async function POST(req: NextRequest) {
     if (authUser) {
       sessionParams.metadata!.supabase_user_id = authUser.id;
       sessionParams.client_reference_id = authUser.id;
+      if (authUser.email) {
+        sessionParams.customer_email = authUser.email;
+      }
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

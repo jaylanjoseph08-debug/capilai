@@ -300,7 +300,7 @@ function AbonnementTab() {
           <span>{syncing ? t("settings.syncSubscriptionLoading") : t("settings.syncSubscription")}</span>
           {!syncing && (
             <span className="mt-0.5 font-body text-[10px] font-normal text-ink/70">
-              {t("settings.syncSubscriptionHint")}
+              {t("settings.syncSubscriptionApplePayHint")}
             </span>
           )}
         </button>

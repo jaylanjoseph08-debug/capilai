@@ -189,7 +189,7 @@ const translations = {
         "Sign in with the same account you used before payment to activate your subscription.",
       checkoutLoginButton: "Sign in",
       checkoutUserMismatch:
-        "This payment is linked to another account. Sign in with the same email you used on Stripe.",
+        "This payment belongs to another Capil AI account. Sign in with Google (the account used before checkout), not your Apple Pay billing email.",
       lifetimeFeature: "Lifetime access",
     },
     plans: {
@@ -240,6 +240,8 @@ const translations = {
       cancelPlanCancelling: "Cancelling…",
       syncSubscription: "Sync my subscription",
       syncSubscriptionHint: "Already paid? Link your Stripe subscription to this account.",
+      syncSubscriptionApplePayHint:
+        "Paid with Apple Pay using another email? Stay signed in with Google, then tap sync — we match your Capil AI account, not the billing email.",
       syncSubscriptionDone: "Subscription synced — your plan is now active.",
       syncSubscriptionFailed: "No active subscription found. Try again or contact support if you were charged.",
       syncSubscriptionLoading: "Syncing…",
@@ -560,7 +562,7 @@ const translations = {
         "Connectez-vous avec le même compte qu'avant le paiement pour activer votre abonnement.",
       checkoutLoginButton: "Se connecter",
       checkoutUserMismatch:
-        "Ce paiement est lié à un autre compte. Connectez-vous avec le même e-mail que sur Stripe.",
+        "Ce paiement est lié à un autre compte Capil AI. Reconnectez-vous avec Google (le compte utilisé avant le paiement), pas avec l'e-mail Apple Pay.",
       lifetimeFeature: "Accès à vie",
     },
     plans: {
@@ -609,6 +611,8 @@ const translations = {
       cancelPlanCancelling: "Résiliation…",
       syncSubscription: "Synchroniser mon abonnement",
       syncSubscriptionHint: "Vous avez déjà payé ? Reliez votre abonnement Stripe à ce compte.",
+      syncSubscriptionApplePayHint:
+        "Payé avec Apple Pay via une autre adresse ? Restez connecté avec Google, puis synchronisez — on lie votre compte Capil AI, pas l'e-mail de facturation.",
       syncSubscriptionDone: "Abonnement synchronisé — votre formule est active.",
       syncSubscriptionFailed:
         "Aucun abonnement actif trouvé. Réessayez ou contactez le support si vous avez été débité.",

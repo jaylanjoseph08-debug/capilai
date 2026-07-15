@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "@/lib/auth/server";
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
-import { linkPendingSubscriptionForEmail } from "@/lib/subscription-db";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import {
+  linkPendingFromUserCheckoutSessions,
   syncSubscriptionFromCheckoutSession,
-  syncSubscriptionFromStripeForEmail,
+  syncSubscriptionFromStripeForUser,
 } from "@/lib/stripe-subscription-sync";
 import { parseJsonBody } from "@/lib/apiErrors";
 
@@ -46,13 +46,14 @@ export async function POST(req: NextRequest) {
       linked = result.ok;
     }
 
-    if (!linked) {
-      linked = await linkPendingSubscriptionForEmail(admin, authUser.id, authUser.email);
+    if (!linked && isStripeConfigured()) {
+      const stripe = getStripe();
+      linked = await linkPendingFromUserCheckoutSessions(admin, stripe, authUser.id, authUser.email);
     }
 
     if (!linked && isStripeConfigured()) {
       const stripe = getStripe();
-      linked = await syncSubscriptionFromStripeForEmail(admin, stripe, authUser.id, authUser.email);
+      linked = await syncSubscriptionFromStripeForUser(admin, stripe, authUser.id, authUser.email);
     }
 
     return NextResponse.json({ configured: true, linked });
