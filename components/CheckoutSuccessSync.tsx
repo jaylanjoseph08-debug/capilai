@@ -11,6 +11,7 @@ import {
 } from "@/lib/subscriptionSync";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { verifyCheckoutSession, isCheckoutSessionVerified } from "@/lib/stripe";
+import { savePendingCheckoutSessionId } from "@/lib/pendingCheckoutSession";
 import { useTranslation } from "@/lib/useTranslation";
 
 type CheckoutSuccessSyncProps = {
@@ -150,6 +151,7 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
 
     processedSessionRef.current = sessionId;
     sessionIdRef.current = sessionId;
+    savePendingCheckoutSessionId(sessionId);
 
     void runActivation(sessionId);
   }, [searchParams, isAuthLoading, isAuthenticated, runActivation, needsLogin]);

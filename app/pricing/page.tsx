@@ -10,8 +10,9 @@ import { useSelectedPlan } from "@/lib/useSelectedPlan";
 import { useAuthStore } from "@/lib/authStore";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
-import { hasPaidAccess } from "@/lib/subscriptionAccess";
+import { hasPaidAccess, hasServerActiveSubscription } from "@/lib/subscriptionAccess";
 import { hasPrivateAccess } from "@/lib/privateAccess";
+import { mirrorServerPlanToLocal, syncSubscriptionFromServer } from "@/lib/subscriptionSync";
 import { PLAN_PRICES, getPlanFeatures, annualSavingsPercent, formatPrice, isLifetimePrice, lifetimeFeatureLabel } from "@/lib/pricing";
 import { startCheckout, isCheckoutSuccess } from "@/lib/stripe";
 import { useTranslation } from "@/lib/useTranslation";
@@ -41,6 +42,7 @@ function PricingContent() {
   const { locale, t, planLabel } = useTranslation();
   const fromDiagnostic = searchParams.get("from") === "diagnostic";
   const fromLimit = searchParams.get("from") === "limit";
+  const fromLogin = searchParams.get("from") === "login";
   const upgradeParam = searchParams.get("upgrade");
   const highlightPlan: Plan | null =
     upgradeParam === "premium" || upgradeParam === "pro" ? upgradeParam : null;
@@ -48,6 +50,7 @@ function PricingContent() {
   const selectedPlan = useSelectedPlan();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
+  const setServerSubscription = useSubscriptionSyncStore((s) => s.setServerSubscription);
   const hasActiveAccess = hasPrivateAccess() || (syncReady && hasPaidAccess(selectedPlan));
   const [cycle, setCycle] = useState<BillingCycle>("annual");
   const [coupon, setCoupon] = useState("");
@@ -79,6 +82,30 @@ function PricingContent() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!fromLogin || !isAuthenticated || !syncReady) return;
+    if (hasPaidAccess(selectedPlan)) {
+      router.replace("/dashboard");
+      return;
+    }
+
+    let cancelled = false;
+    async function recoverAfterLogin() {
+      const result = await syncSubscriptionFromServer();
+      if (cancelled) return;
+      if (hasServerActiveSubscription(result.payload)) {
+        setServerSubscription(result.payload);
+        mirrorServerPlanToLocal(result.payload);
+        router.replace("/dashboard");
+      }
+    }
+
+    void recoverAfterLogin();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromLogin, isAuthenticated, router, selectedPlan, setServerSubscription, syncReady]);
 
   async function handleChoose(plan: Plan) {
     if (isSupabaseConfigured() && !isAuthenticated) {

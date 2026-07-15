@@ -5,6 +5,7 @@ import { hasPaidAccess, hasServerActiveSubscription } from "./subscriptionAccess
 import {
   mirrorServerPlanToLocal,
   syncSubscriptionFromServer,
+  waitForAccessToken,
 } from "./subscriptionSync";
 import { isSupabaseConfigured } from "./supabase/client";
 import { getSelectedPlan, useSubscriptionStore } from "./subscriptionStore";
@@ -34,7 +35,10 @@ export async function resolvePostLoginPath(intendedPath = "/dashboard"): Promise
   if (hasPrivateAccess()) return intendedPath;
   if (!isSupabaseConfigured()) return intendedPath;
 
-  const payload = (await syncSubscriptionFromServer()).payload;
+  await waitForAccessToken();
+
+  const result = await syncSubscriptionFromServer();
+  const payload = result.payload;
   mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);
 
   if (hasServerActiveSubscription(payload)) {

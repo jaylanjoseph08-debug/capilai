@@ -88,6 +88,15 @@ export async function POST(req: NextRequest) {
       if (authUser.email) {
         sessionParams.customer_email = authUser.email;
       }
+      if (mode === "subscription") {
+        sessionParams.subscription_data = {
+          metadata: {
+            plan,
+            billingCycle,
+            supabase_user_id: authUser.id,
+          },
+        };
+      }
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

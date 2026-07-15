@@ -238,6 +238,12 @@ function escapeStripeSearchValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function sessionMatchesUser(session: Stripe.Checkout.Session, userId: string): boolean {
+  const metaUser =
+    session.metadata?.supabase_user_id?.trim() || session.client_reference_id?.trim();
+  return metaUser === userId;
+}
+
 /** Paid checkout sessions linked to this Capil AI account (works when Apple Pay uses another email). */
 async function findCompletedCheckoutSessionsForUser(
   stripe: Stripe,
@@ -259,6 +265,30 @@ async function findCompletedCheckoutSessionsForUser(
 
   await collect(`metadata['supabase_user_id']:'${escapedUserId}' AND status:'complete'`);
   await collect(`client_reference_id:'${escapedUserId}' AND status:'complete'`);
+
+  if (byId.size === 0) {
+    try {
+      let startingAfter: string | undefined;
+      for (let page = 0; page < 5; page++) {
+        const batch = await stripe.checkout.sessions.list({
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        });
+        if (batch.data.length === 0) break;
+
+        for (const session of batch.data) {
+          if (session.status === "complete" && sessionMatchesUser(session, userId)) {
+            byId.set(session.id, session);
+          }
+        }
+
+        if (!batch.has_more) break;
+        startingAfter = batch.data[batch.data.length - 1]?.id;
+      }
+    } catch (error) {
+      console.warn("[stripe-subscription-sync] checkout session list fallback failed", error);
+    }
+  }
 
   return [...byId.values()].sort((a, b) => b.created - a.created);
 }
@@ -352,6 +382,79 @@ async function syncFromStripeCustomersByEmail(
   }
 
   return false;
+}
+
+async function syncFromActiveSubscriptionsByMetadata(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string
+): Promise<boolean> {
+  try {
+    let startingAfter: string | undefined;
+    let newestActiveSubscription: Stripe.Subscription | null = null;
+
+    for (let page = 0; page < 10; page++) {
+      const batch = await stripe.subscriptions.list({
+        status: "active",
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      if (batch.data.length === 0) break;
+
+      for (const subscription of batch.data) {
+        const metaUser = subscription.metadata?.supabase_user_id?.trim();
+        if (metaUser !== userId) continue;
+        if (!newestActiveSubscription || subscription.created > newestActiveSubscription.created) {
+          newestActiveSubscription = subscription;
+        }
+      }
+
+      if (!batch.has_more) break;
+      startingAfter = batch.data[batch.data.length - 1]?.id;
+    }
+
+    if (newestActiveSubscription) {
+      return upsertFromStripeSubscription(admin, userId, newestActiveSubscription);
+    }
+  } catch (error) {
+    console.warn("[stripe-subscription-sync] subscription list fallback failed", error);
+  }
+
+  return false;
+}
+
+/** Run every recovery path to attach Stripe billing to this Supabase user. */
+export async function ensureUserSubscriptionSynced(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  userId: string,
+  email: string,
+  sessionId?: string | null
+): Promise<boolean> {
+  if (sessionId) {
+    const fromSession = await syncSubscriptionFromCheckoutSession(
+      admin,
+      stripe,
+      userId,
+      sessionId,
+      email
+    );
+    if (fromSession.ok) return true;
+  }
+
+  if (await linkPendingFromUserCheckoutSessions(admin, stripe, userId, email)) {
+    return true;
+  }
+
+  if (await syncSubscriptionFromStripeForUser(admin, stripe, userId, email)) {
+    return true;
+  }
+
+  if (await syncFromActiveSubscriptionsByMetadata(admin, stripe, userId)) {
+    return true;
+  }
+
+  return refreshExistingActiveSubscription(admin, stripe, userId);
 }
 
 async function syncActiveSubscriptionFromCustomer(

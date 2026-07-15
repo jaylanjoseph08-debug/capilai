@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "@/lib/auth/server";
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
-import {
-  linkPendingFromUserCheckoutSessions,
-  syncSubscriptionFromCheckoutSession,
-  syncSubscriptionFromStripeForUser,
-} from "@/lib/stripe-subscription-sync";
+import { ensureUserSubscriptionSynced } from "@/lib/stripe-subscription-sync";
 import { parseJsonBody } from "@/lib/apiErrors";
 
 export const runtime = "nodejs";
@@ -31,30 +27,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    if (!isStripeConfigured()) {
+      return NextResponse.json({ configured: false, linked: false }, { status: 501 });
+    }
+
     const admin = getSupabaseAdmin();
-    let linked = false;
-
-    if (sessionId && isStripeConfigured()) {
-      const stripe = getStripe();
-      const result = await syncSubscriptionFromCheckoutSession(
-        admin,
-        stripe,
-        authUser.id,
-        sessionId,
-        authUser.email
-      );
-      linked = result.ok;
-    }
-
-    if (!linked && isStripeConfigured()) {
-      const stripe = getStripe();
-      linked = await linkPendingFromUserCheckoutSessions(admin, stripe, authUser.id, authUser.email);
-    }
-
-    if (!linked && isStripeConfigured()) {
-      const stripe = getStripe();
-      linked = await syncSubscriptionFromStripeForUser(admin, stripe, authUser.id, authUser.email);
-    }
+    const stripe = getStripe();
+    const linked = await ensureUserSubscriptionSynced(
+      admin,
+      stripe,
+      authUser.id,
+      authUser.email,
+      sessionId
+    );
 
     return NextResponse.json({ configured: true, linked });
   } catch (error) {

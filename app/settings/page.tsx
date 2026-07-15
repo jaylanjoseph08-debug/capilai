@@ -15,8 +15,10 @@ import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { cancelSubscriptionOnServer } from "@/lib/subscriptionCancel";
 import {
   mirrorServerPlanToLocal,
+  forceSyncSubscriptionFromServer,
   syncSubscriptionFromServer,
 } from "@/lib/subscriptionSync";
+import { getPendingCheckoutSessionId } from "@/lib/pendingCheckoutSession";
 import { hasServerActiveSubscription } from "@/lib/subscriptionAccess";
 import { useLocaleStore, type Locale } from "@/lib/locale";
 import { LOCALE_LABELS } from "@/lib/i18n";
@@ -226,8 +228,7 @@ function AbonnementTab() {
     setError("");
     setNotice("");
 
-    const result = await syncSubscriptionFromServer();
-    const payload = result.payload;
+    const payload = await forceSyncSubscriptionFromServer(getPendingCheckoutSessionId() ?? undefined);
     if (payload) {
       setServerSubscription(payload);
       mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);

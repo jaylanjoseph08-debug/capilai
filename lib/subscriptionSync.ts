@@ -2,6 +2,11 @@
 
 import type { BillingCycle, Plan } from "./subscriptionStore";
 import { mirrorServerPlanToLocal } from "./subscriptionStore";
+import {
+  clearPendingCheckoutSessionId,
+  getPendingCheckoutSessionId,
+} from "./pendingCheckoutSession";
+import { hasServerActiveSubscription } from "./subscriptionAccess";
 
 export type SubscriptionMePayload = {
   configured: boolean;
@@ -61,7 +66,40 @@ export async function fetchSubscriptionFromServer(): Promise<SubscriptionMePaylo
     if (res.status === 401) return null;
     if (!res.ok) return null;
 
-    return (await res.json()) as SubscriptionMePayload;
+    const payload = (await res.json()) as SubscriptionMePayload;
+    if (hasServerActiveSubscription(payload)) {
+      clearPendingCheckoutSessionId();
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/** Force full Stripe recovery on the server (POST /api/subscription/me). */
+export async function forceSyncSubscriptionFromServer(
+  sessionId?: string
+): Promise<SubscriptionMePayload | null> {
+  const token = await waitForAccessToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch("/api/subscription/me", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(sessionId ? { sessionId } : {}),
+    });
+
+    if (!res.ok) return null;
+
+    const payload = (await res.json()) as SubscriptionMePayload;
+    if (hasServerActiveSubscription(payload)) {
+      clearPendingCheckoutSessionId();
+    }
+    return payload;
   } catch {
     return null;
   }
@@ -133,9 +171,12 @@ export async function activateSubscriptionFromCheckoutSession(
 }
 
 export async function syncSubscriptionFromServer(sessionId?: string): Promise<SyncSubscriptionResult> {
-  if (sessionId) {
-    const activated = await activateSubscriptionFromCheckoutSession(sessionId);
+  const effectiveSessionId = sessionId ?? getPendingCheckoutSessionId() ?? undefined;
+
+  if (effectiveSessionId) {
+    const activated = await activateSubscriptionFromCheckoutSession(effectiveSessionId);
     if (activated.ok) {
+      clearPendingCheckoutSessionId();
       return { payload: activated.payload };
     }
 
@@ -147,7 +188,12 @@ export async function syncSubscriptionFromServer(sessionId?: string): Promise<Sy
     }
   }
 
-  await linkPendingSubscriptionFromServer(sessionId);
+  const forced = await forceSyncSubscriptionFromServer(effectiveSessionId);
+  if (forced) {
+    return { payload: forced };
+  }
+
+  await linkPendingSubscriptionFromServer(effectiveSessionId);
   return { payload: await fetchSubscriptionFromServer() };
 }
 
