@@ -167,6 +167,9 @@ function AbonnementTab() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const hasActivePlan = hasServerActiveSubscription(serverSubscription);
 
   const canCancel = Boolean(serverSubscription?.canCancel);
   const cancelAtPeriodEnd = Boolean(serverSubscription?.cancelAtPeriodEnd);
@@ -217,6 +220,27 @@ function AbonnementTab() {
     );
   }
 
+  async function handleSyncSubscription() {
+    setSyncing(true);
+    setError("");
+    setNotice("");
+
+    const payload = await syncSubscriptionFromServer();
+    if (payload) {
+      setServerSubscription(payload);
+      mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);
+    }
+
+    setSyncing(false);
+
+    if (hasServerActiveSubscription(payload)) {
+      setNotice(t("settings.syncSubscriptionDone"));
+      return;
+    }
+
+    setError(t("settings.syncSubscriptionFailed"));
+  }
+
   return (
     <div>
       <div className="glass mb-4 rounded-3xl p-5">
@@ -263,6 +287,22 @@ function AbonnementTab() {
         </div>
         <ChevronRight size={18} className="text-muted" />
       </Link>
+
+      {isAuthenticated && syncReady && !hasActivePlan && (
+        <button
+          type="button"
+          onClick={handleSyncSubscription}
+          disabled={syncing}
+          className="mb-3 flex h-12 w-full flex-col items-center justify-center rounded-full bg-copper-gradient font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98] disabled:opacity-60"
+        >
+          <span>{syncing ? t("settings.syncSubscriptionLoading") : t("settings.syncSubscription")}</span>
+          {!syncing && (
+            <span className="mt-0.5 font-body text-[10px] font-normal text-ink/70">
+              {t("settings.syncSubscriptionHint")}
+            </span>
+          )}
+        </button>
+      )}
 
       {isAuthenticated && syncReady && canCancel && (
         <button

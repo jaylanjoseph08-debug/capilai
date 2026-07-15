@@ -35,7 +35,7 @@ export async function fetchSubscriptionFromServer(): Promise<SubscriptionMePaylo
 }
 
 /** Links a guest Stripe checkout (same email) to the authenticated user. */
-export async function linkPendingSubscriptionFromServer(): Promise<boolean> {
+export async function linkPendingSubscriptionFromServer(sessionId?: string): Promise<boolean> {
   const { getAccessToken } = await import("./supabase/session");
   const token = await getAccessToken();
   if (!token) return false;
@@ -43,7 +43,11 @@ export async function linkPendingSubscriptionFromServer(): Promise<boolean> {
   try {
     const res = await fetch("/api/subscription/link", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(sessionId ? { sessionId } : {}),
     });
     if (!res.ok) return false;
     const data = (await res.json()) as { linked?: boolean };
@@ -53,8 +57,40 @@ export async function linkPendingSubscriptionFromServer(): Promise<boolean> {
   }
 }
 
-export async function syncSubscriptionFromServer(): Promise<SubscriptionMePayload | null> {
-  await linkPendingSubscriptionFromServer();
+/** Force activation from the Stripe Checkout session (post-payment fallback). */
+export async function activateSubscriptionFromCheckoutSession(
+  sessionId: string
+): Promise<SubscriptionMePayload | null> {
+  const { getAccessToken } = await import("./supabase/session");
+  const token = await getAccessToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch("/api/subscription/activate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (!res.ok) return null;
+    return (await res.json()) as SubscriptionMePayload;
+  } catch {
+    return null;
+  }
+}
+
+export async function syncSubscriptionFromServer(sessionId?: string): Promise<SubscriptionMePayload | null> {
+  if (sessionId) {
+    const activated = await activateSubscriptionFromCheckoutSession(sessionId);
+    if (activated?.hasActiveSubscription) {
+      return activated;
+    }
+  }
+
+  await linkPendingSubscriptionFromServer(sessionId);
   return fetchSubscriptionFromServer();
 }
 
@@ -66,16 +102,17 @@ const DEFAULT_POLL_DELAYS_MS = [1000, 2000, 3000, 5000, 8000, 10000, 15000];
 
 /** Poll Supabase until an active subscription appears (post-Stripe webhook). */
 export async function pollSubscriptionUntilActive(
+  sessionId?: string,
   delaysMs: readonly number[] = DEFAULT_POLL_DELAYS_MS
 ): Promise<SubscriptionMePayload | null> {
-  let payload = await syncSubscriptionFromServer();
+  let payload = await syncSubscriptionFromServer(sessionId);
   if (payload?.configured && payload.hasActiveSubscription && payload.plan) {
     return payload;
   }
 
   for (const delay of delaysMs) {
     await sleep(delay);
-    payload = await syncSubscriptionFromServer();
+    payload = await syncSubscriptionFromServer(sessionId);
     if (payload?.configured && payload.hasActiveSubscription && payload.plan) {
       return payload;
     }

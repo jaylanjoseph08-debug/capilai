@@ -3,7 +3,11 @@ import { getAuthUserFromRequest } from "@/lib/auth/server";
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import { linkPendingSubscriptionForEmail } from "@/lib/subscription-db";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
-import { syncSubscriptionFromStripeForEmail } from "@/lib/stripe-subscription-sync";
+import {
+  syncSubscriptionFromCheckoutSession,
+  syncSubscriptionFromStripeForEmail,
+} from "@/lib/stripe-subscription-sync";
+import { parseJsonBody } from "@/lib/apiErrors";
 
 export const runtime = "nodejs";
 
@@ -17,9 +21,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let sessionId: string | undefined;
+  try {
+    const body = await req.json();
+    const parsed = parseJsonBody<{ sessionId?: string }>(body, []);
+    sessionId = parsed?.sessionId?.trim();
+  } catch {
+    // optional body
+  }
+
   try {
     const admin = getSupabaseAdmin();
-    let linked = await linkPendingSubscriptionForEmail(admin, authUser.id, authUser.email);
+    let linked = false;
+
+    if (sessionId && isStripeConfigured()) {
+      const stripe = getStripe();
+      linked = await syncSubscriptionFromCheckoutSession(admin, stripe, authUser.id, sessionId);
+    }
+
+    if (!linked) {
+      linked = await linkPendingSubscriptionForEmail(admin, authUser.id, authUser.email);
+    }
 
     if (!linked && isStripeConfigured()) {
       const stripe = getStripe();

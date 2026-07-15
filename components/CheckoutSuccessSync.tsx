@@ -51,7 +51,7 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
 
       setNotice({ type: "success", message: t("pricing.checkoutActivating") });
 
-      const payload = await pollSubscriptionUntilActive();
+      const payload = await pollSubscriptionUntilActive(sessionId);
       setSyncing(false);
 
       if (hasServerActiveSubscription(payload)) {
