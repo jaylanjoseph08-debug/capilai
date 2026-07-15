@@ -36,7 +36,14 @@ export async function POST(req: NextRequest) {
 
     if (sessionId && isStripeConfigured()) {
       const stripe = getStripe();
-      linked = await syncSubscriptionFromCheckoutSession(admin, stripe, authUser.id, sessionId);
+      const result = await syncSubscriptionFromCheckoutSession(
+        admin,
+        stripe,
+        authUser.id,
+        sessionId,
+        authUser.email
+      );
+      linked = result.ok;
     }
 
     if (!linked) {

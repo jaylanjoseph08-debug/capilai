@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Plan, BillingCycle } from "./subscriptionStore";
 import {
+  checkoutEmailFromSession,
   getSubscriptionByUserId,
   isActiveSubscriptionStatus,
   mapStripeSubscriptionStatus,
@@ -24,9 +25,24 @@ function planFromStripePriceId(priceId: string | null | undefined): Plan | null 
   return resolvePlanFromStripePrice(priceId);
 }
 
-function sessionBelongsToUser(session: Stripe.Checkout.Session, userId: string): boolean {
+export type CheckoutSyncResult = { ok: true } | { ok: false; code: string; message?: string };
+
+function sessionBelongsToUser(
+  session: Stripe.Checkout.Session,
+  userId: string,
+  userEmail?: string | null
+): boolean {
   const fromMeta = session.metadata?.supabase_user_id?.trim() || session.client_reference_id?.trim();
-  return !fromMeta || fromMeta === userId;
+  if (fromMeta === userId) return true;
+
+  const normalizedUserEmail = userEmail ? normalizeEmail(userEmail) : null;
+  const checkoutEmail = checkoutEmailFromSession(session);
+  if (normalizedUserEmail && checkoutEmail && normalizedUserEmail === checkoutEmail) {
+    return true;
+  }
+
+  if (fromMeta && fromMeta !== userId) return false;
+  return !fromMeta;
 }
 
 async function upsertFromStripeSubscription(
@@ -77,27 +93,30 @@ export async function syncSubscriptionFromCheckoutSession(
   admin: SupabaseClient,
   stripe: Stripe,
   userId: string,
-  sessionId: string
-): Promise<boolean> {
+  sessionId: string,
+  userEmail?: string | null
+): Promise<CheckoutSyncResult> {
   const session = await stripe.checkout.sessions.retrieve(sessionId, {
     expand: ["line_items.data.price", "subscription", "customer"],
   });
 
-  if (!sessionBelongsToUser(session, userId)) {
+  if (!sessionBelongsToUser(session, userId, userEmail)) {
     console.warn("[stripe-subscription-sync] checkout session user mismatch", sessionId);
-    return false;
+    return { ok: false, code: "USER_MISMATCH" };
   }
 
-  if (session.status !== "complete") return false;
+  if (session.status !== "complete") {
+    return { ok: false, code: "SESSION_INCOMPLETE" };
+  }
   if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
-    return false;
+    return { ok: false, code: "PAYMENT_INCOMPLETE" };
   }
 
   const plan = resolveCheckoutPlan(session);
   const billingCycle = resolveCheckoutBillingCycle(session);
   if (!plan || !billingCycle) {
     console.error("[stripe-subscription-sync] missing plan metadata", sessionId, session.metadata);
-    return false;
+    return { ok: false, code: "MISSING_PLAN" };
   }
 
   const priceId = resolvePriceIdFromSession(session);
@@ -116,7 +135,9 @@ export async function syncSubscriptionFromCheckoutSession(
   if (!isLifetime && stripeSubscriptionId) {
     const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
     status = mapStripeSubscriptionStatus(subscription.status);
-    if (!isActiveSubscriptionStatus(status)) return false;
+    if (!isActiveSubscriptionStatus(status)) {
+      return { ok: false, code: "SUBSCRIPTION_INACTIVE", message: subscription.status };
+    }
     currentPeriodEnd = new Date(subscription.current_period_end * 1000);
 
     // New checkout after a pending cancellation — reactivate billing on the new subscription.
@@ -136,7 +157,16 @@ export async function syncSubscriptionFromCheckoutSession(
     currentPeriodEnd: isLifetime ? null : currentPeriodEnd,
   });
 
-  return !error;
+  if (error) {
+    return { ok: false, code: "UPSERT_FAILED", message: error };
+  }
+
+  const checkoutEmail = checkoutEmailFromSession(session);
+  if (checkoutEmail) {
+    await admin.from("pending_subscriptions").delete().eq("email", normalizeEmail(checkoutEmail));
+  }
+
+  return { ok: true };
 }
 
 async function refreshExistingActiveSubscription(
@@ -241,8 +271,8 @@ export async function syncSubscriptionFromStripeForEmail(
         continue;
       }
 
-      const synced = await syncSubscriptionFromCheckoutSession(admin, stripe, userId, session.id);
-      if (synced) return true;
+      const synced = await syncSubscriptionFromCheckoutSession(admin, stripe, userId, session.id, email);
+      if (synced.ok) return true;
     }
   }
 

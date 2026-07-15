@@ -8,6 +8,16 @@ import { syncSubscriptionFromCheckoutSession } from "@/lib/stripe-subscription-s
 
 export const runtime = "nodejs";
 
+const ACTIVATION_MESSAGES: Record<string, string> = {
+  USER_MISMATCH:
+    "This payment belongs to another account. Sign in with the same email you used on Stripe.",
+  SESSION_INCOMPLETE: "Checkout session is not complete yet.",
+  PAYMENT_INCOMPLETE: "Payment was not completed for this session.",
+  MISSING_PLAN: "Could not determine the plan for this checkout.",
+  SUBSCRIPTION_INACTIVE: "Stripe subscription is not active yet.",
+  UPSERT_FAILED: "Could not save subscription to the database.",
+};
+
 /** Force-write subscription from a completed Stripe Checkout session (webhook fallback). */
 export async function POST(req: NextRequest) {
   if (!isSupabaseAdminConfigured()) {
@@ -20,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   const authUser = await getAuthUserFromRequest(req);
   if (!authUser) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Sign in to activate your subscription.", 401, { code: "AUTH_REQUIRED" });
   }
 
   let body: unknown;
@@ -39,14 +49,18 @@ export async function POST(req: NextRequest) {
   try {
     const admin = getSupabaseAdmin();
     const stripe = getStripe();
-    const synced = await syncSubscriptionFromCheckoutSession(admin, stripe, authUser.id, sessionId);
+    const synced = await syncSubscriptionFromCheckoutSession(
+      admin,
+      stripe,
+      authUser.id,
+      sessionId,
+      authUser.email
+    );
 
-    if (!synced) {
-      return apiError(
-        "Could not activate subscription from this checkout session. Try again in a moment.",
-        502,
-        { code: "ACTIVATION_FAILED" }
-      );
+    if (!synced.ok) {
+      const message = ACTIVATION_MESSAGES[synced.code] ?? "Could not activate subscription from this checkout session.";
+      console.error("[subscription/activate]", synced.code, synced.message ?? "", sessionId);
+      return apiError(message, 502, { code: synced.code });
     }
 
     const payload = await getSubscriptionMeForUser(authUser.id);

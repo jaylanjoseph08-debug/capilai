@@ -193,22 +193,23 @@ function AbonnementTab() {
     setError("");
     setNotice("");
 
-    const result = await cancelSubscriptionOnServer();
-    if (!result.ok) {
+    const cancelResult = await cancelSubscriptionOnServer();
+    if (!cancelResult.ok) {
       setCancelling(false);
-      if (result.code === "LIFETIME_NOT_CANCELLABLE") {
+      if (cancelResult.code === "LIFETIME_NOT_CANCELLABLE") {
         setError(t("settings.cancelPlanLifetime"));
         return;
       }
-      if (result.code === "NO_STRIPE_SUBSCRIPTION") {
+      if (cancelResult.code === "NO_STRIPE_SUBSCRIPTION") {
         setError(t("settings.cancelPlanNoBilling"));
         return;
       }
-      setError(result.error ?? t("settings.cancelPlanError"));
+      setError(cancelResult.error ?? t("settings.cancelPlanError"));
       return;
     }
 
-    const payload = await syncSubscriptionFromServer();
+    const syncResult = await syncSubscriptionFromServer();
+    const payload = syncResult.payload;
     if (payload) {
       setServerSubscription(payload);
       mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);
@@ -216,7 +217,7 @@ function AbonnementTab() {
 
     setCancelling(false);
     setNotice(
-      t("settings.cancelPlanDone").replace("{date}", formatPeriodEnd(result.currentPeriodEnd ?? periodEnd))
+      t("settings.cancelPlanDone").replace("{date}", formatPeriodEnd(cancelResult.currentPeriodEnd ?? periodEnd))
     );
   }
 
@@ -225,7 +226,8 @@ function AbonnementTab() {
     setError("");
     setNotice("");
 
-    const payload = await syncSubscriptionFromServer();
+    const result = await syncSubscriptionFromServer();
+    const payload = result.payload;
     if (payload) {
       setServerSubscription(payload);
       mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);

@@ -185,6 +185,11 @@ const translations = {
       checkoutSyncFailed:
         "Payment confirmed but your subscription is not active yet. Try activating again below, or contact support if the issue persists.",
       checkoutRetryActivation: "Retry activation",
+      checkoutLoginRequired:
+        "Sign in with the same account you used before payment to activate your subscription.",
+      checkoutLoginButton: "Sign in",
+      checkoutUserMismatch:
+        "This payment is linked to another account. Sign in with the same email you used on Stripe.",
       lifetimeFeature: "Lifetime access",
     },
     plans: {
@@ -551,6 +556,11 @@ const translations = {
       checkoutSyncFailed:
         "Paiement confirmé mais l'abonnement n'est pas encore actif. Réessayez l'activation ci-dessous, ou contactez le support si le problème persiste.",
       checkoutRetryActivation: "Réessayer l'activation",
+      checkoutLoginRequired:
+        "Connectez-vous avec le même compte qu'avant le paiement pour activer votre abonnement.",
+      checkoutLoginButton: "Se connecter",
+      checkoutUserMismatch:
+        "Ce paiement est lié à un autre compte. Connectez-vous avec le même e-mail que sur Stripe.",
       lifetimeFeature: "Accès à vie",
     },
     plans: {

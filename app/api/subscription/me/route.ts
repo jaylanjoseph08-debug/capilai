@@ -6,13 +6,7 @@ import {
   emptySubscriptionMeResponse,
   type SubscriptionMeResponse,
 } from "@/lib/subscription-me-server";
-import { getSubscriptionByUserId, linkPendingSubscriptionForEmail } from "@/lib/subscription-db";
-import { parseJsonBody } from "@/lib/apiErrors";
-import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
-import {
-  syncSubscriptionFromCheckoutSession,
-  syncSubscriptionFromStripeForEmail,
-} from "@/lib/stripe-subscription-sync";
+import { getSubscriptionByUserId } from "@/lib/subscription-db";
 
 export const runtime = "nodejs";
 

@@ -100,10 +100,47 @@ export function isValidBillingCycle(value: string | undefined | null): value is 
   return value === "monthly" || value === "annual";
 }
 
+/** Clear Stripe IDs from other rows so upsert unique constraints do not block re-subscribe. */
+async function releaseStripeIdConflicts(
+  admin: SupabaseClient,
+  userId: string,
+  stripeCustomerId?: string | null,
+  stripeSubscriptionId?: string | null
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  if (stripeCustomerId) {
+    await admin
+      .from("subscriptions")
+      .update({ stripe_customer_id: null, stripe_subscription_id: null, updated_at: now })
+      .eq("stripe_customer_id", stripeCustomerId)
+      .neq("user_id", userId);
+
+    await admin.from("pending_subscriptions").delete().eq("stripe_customer_id", stripeCustomerId);
+  }
+
+  if (stripeSubscriptionId) {
+    await admin
+      .from("subscriptions")
+      .update({ stripe_subscription_id: null, updated_at: now })
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .neq("user_id", userId);
+
+    await admin.from("pending_subscriptions").delete().eq("stripe_subscription_id", stripeSubscriptionId);
+  }
+}
+
 export async function upsertSubscription(
   admin: SupabaseClient,
   input: SubscriptionUpsertInput
 ): Promise<{ error?: string }> {
+  await releaseStripeIdConflicts(
+    admin,
+    input.userId,
+    input.stripeCustomerId,
+    input.stripeSubscriptionId
+  );
+
   const row = {
     user_id: input.userId,
     plan: input.plan,

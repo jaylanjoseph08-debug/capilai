@@ -43,7 +43,8 @@ export function SubscriptionSync() {
     resetSync();
 
     async function sync() {
-      const payload = await syncSubscriptionFromServer();
+      const result = await syncSubscriptionFromServer();
+      const payload = result.payload;
       if (cancelled) return;
 
       setServerSubscription(payload);

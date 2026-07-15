@@ -34,7 +34,7 @@ export async function resolvePostLoginPath(intendedPath = "/dashboard"): Promise
   if (hasPrivateAccess()) return intendedPath;
   if (!isSupabaseConfigured()) return intendedPath;
 
-  const payload = await syncSubscriptionFromServer();
+  const payload = (await syncSubscriptionFromServer()).payload;
   mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);
 
   if (hasServerActiveSubscription(payload)) {
