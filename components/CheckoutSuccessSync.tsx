@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { hasServerActiveSubscription } from "@/lib/subscriptionAccess";
 import {
@@ -24,38 +24,34 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
   const markReady = useSubscriptionSyncStore((s) => s.markReady);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [canRetry, setCanRetry] = useState(false);
   const processedSessionRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const paymentVerifiedRef = useRef(false);
 
-  useEffect(() => {
-    const checkout = searchParams.get("checkout");
-    const sessionId = searchParams.get("session_id")?.trim();
-    if (checkout !== "success" || !sessionId) return;
-    if (processedSessionRef.current === sessionId) return;
-    processedSessionRef.current = sessionId;
-
-    let cancelled = false;
-
-    async function activateSubscription() {
+  const runActivation = useCallback(
+    async (sessionId: string, options?: { skipVerify?: boolean }) => {
       setSyncing(true);
+      setCanRetry(false);
       setNotice(null);
 
-      const verified = await verifyCheckoutSession(sessionId!);
-      if (cancelled) return;
-
-      if (!isCheckoutSessionVerified(verified)) {
-        setSyncing(false);
-        setNotice({
-          type: "error",
-          message: verified.error ?? t("settings.checkoutVerifyError"),
-        });
-        return;
+      if (!options?.skipVerify && !paymentVerifiedRef.current) {
+        const verified = await verifyCheckoutSession(sessionId);
+        if (!isCheckoutSessionVerified(verified)) {
+          setSyncing(false);
+          setCanRetry(true);
+          setNotice({
+            type: "error",
+            message: verified.error ?? t("settings.checkoutVerifyError"),
+          });
+          return;
+        }
+        paymentVerifiedRef.current = true;
       }
 
       setNotice({ type: "success", message: t("pricing.checkoutActivating") });
 
       const payload = await pollSubscriptionUntilActive();
-      if (cancelled) return;
-
       setSyncing(false);
 
       if (hasServerActiveSubscription(payload)) {
@@ -67,17 +63,32 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
         return;
       }
 
+      setCanRetry(true);
       setNotice({
         type: "error",
         message: t("pricing.checkoutSyncFailed"),
       });
-    }
+    },
+    [markReady, onSuccess, redirectPath, router, setServerSubscription, t]
+  );
 
-    void activateSubscription();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams, setServerSubscription, markReady, onSuccess, router, redirectPath, t]);
+  useEffect(() => {
+    const checkout = searchParams.get("checkout");
+    const sessionId = searchParams.get("session_id")?.trim();
+    if (checkout !== "success" || !sessionId) return;
+    if (processedSessionRef.current === sessionId) return;
+    processedSessionRef.current = sessionId;
+    sessionIdRef.current = sessionId;
+    paymentVerifiedRef.current = false;
+
+    void runActivation(sessionId);
+  }, [searchParams, runActivation]);
+
+  function handleRetry() {
+    const sessionId = sessionIdRef.current ?? searchParams.get("session_id")?.trim();
+    if (!sessionId) return;
+    void runActivation(sessionId, { skipVerify: paymentVerifiedRef.current });
+  }
 
   if (!notice && !syncing) return null;
 
@@ -92,6 +103,15 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
       >
         {syncing && !notice ? t("pricing.checkoutActivating") : notice?.message}
       </p>
+      {canRetry && !syncing && (
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="mt-3 flex h-12 w-full items-center justify-center rounded-full bg-copper-gradient font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98]"
+        >
+          {t("pricing.checkoutRetryActivation")}
+        </button>
+      )}
     </div>
   );
 }

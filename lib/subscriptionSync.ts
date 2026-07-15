@@ -9,6 +9,9 @@ export type SubscriptionMePayload = {
   plan: Plan | null;
   billingCycle: BillingCycle | null;
   status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  canCancel: boolean;
 };
 
 export async function fetchSubscriptionFromServer(): Promise<SubscriptionMePayload | null> {

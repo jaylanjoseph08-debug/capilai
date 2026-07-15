@@ -218,7 +218,6 @@ export function resolveLifetimeFromSession(
 ): boolean {
   return (
     session.metadata?.purchaseType === "lifetime" ||
-    session.mode === "payment" ||
     Boolean(priceId && isLifetimeStripePriceId(priceId))
   );
 }

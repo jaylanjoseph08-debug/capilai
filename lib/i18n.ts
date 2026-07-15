@@ -169,7 +169,8 @@ const translations = {
       annual: "Annual",
       promoCode: "Promo code",
       promoApplied: "Code applied: -10% on paid plans.",
-      stripeError: "Stripe returned an error — plan applied locally in demo mode.",
+      stripeError: "Could not open Stripe checkout. Please try again or contact support.",
+      checkoutNotConfigured: "This plan is not available for checkout yet (Stripe price missing on the server).",
       demoMode: "Demo mode: Stripe not configured, plan applied locally.",
       limitReached: "You've reached your monthly hair scan limit. Upgrade your plan to continue.",
       perMonth: "/mo",
@@ -182,7 +183,8 @@ const translations = {
       redirecting: "Redirecting…",
       checkoutActivating: "Payment received — activating your subscription…",
       checkoutSyncFailed:
-        "Payment confirmed but your subscription is not active yet. Wait a moment and refresh, or contact support.",
+        "Payment confirmed but your subscription is not active yet. Try activating again below, or contact support if the issue persists.",
+      checkoutRetryActivation: "Retry activation",
       lifetimeFeature: "Lifetime access",
     },
     plans: {
@@ -220,8 +222,17 @@ const translations = {
       choosePlan: "Choose a plan",
       managePlan: "Manage subscription",
       cancelPlan: "Cancel subscription",
-      cancelPlanConfirm: "Cancel your subscription?",
-      cancelPlanDone: "Subscription cancelled. Choose a plan to continue using Capil AI.",
+      cancelPlanConfirm:
+        "Cancel your subscription at the end of the current billing period? You will keep access until then.",
+      cancelPlanDone:
+        "Subscription cancelled. You keep access until {date}.",
+      cancelPlanScheduled:
+        "Cancellation scheduled — access until {date}.",
+      cancelPlanError: "Could not cancel your subscription. Please try again or contact support.",
+      cancelPlanLifetime:
+        "Lifetime access cannot be cancelled online. Contact support if you need help.",
+      cancelPlanNoBilling: "This plan is not linked to recurring Stripe billing.",
+      cancelPlanCancelling: "Cancelling…",
       checkoutSuccess: "Payment confirmed — your subscription is now active.",
       checkoutVerifyError: "We could not verify your payment. Contact support if you were charged.",
       viewPlans: "View Discovery / Essential / Premium plans",
@@ -519,7 +530,8 @@ const translations = {
       annual: "Annuel",
       promoCode: "Code promo",
       promoApplied: "Code appliqué : -10% sur les offres payantes.",
-      stripeError: "Stripe a renvoyé une erreur — plan appliqué localement en mode démo.",
+      stripeError: "Impossible d'ouvrir le paiement Stripe. Réessayez ou contactez le support.",
+      checkoutNotConfigured: "Cette formule n'est pas disponible au paiement (tarif Stripe manquant sur le serveur).",
       demoMode: "Mode démo : Stripe non configuré, plan appliqué localement.",
       limitReached: "Limite mensuelle de scans cheveux atteinte. Passez à la formule supérieure pour continuer.",
       perMonth: "/mois",
@@ -532,7 +544,8 @@ const translations = {
       redirecting: "Redirection…",
       checkoutActivating: "Paiement reçu — activation de votre abonnement…",
       checkoutSyncFailed:
-        "Paiement confirmé mais l'abonnement n'est pas encore actif. Attendez quelques instants et rafraîchissez, ou contactez le support.",
+        "Paiement confirmé mais l'abonnement n'est pas encore actif. Réessayez l'activation ci-dessous, ou contactez le support si le problème persiste.",
+      checkoutRetryActivation: "Réessayer l'activation",
       lifetimeFeature: "Accès à vie",
     },
     plans: {
@@ -570,8 +583,15 @@ const translations = {
       choosePlan: "Choisir une formule",
       managePlan: "Gérer mon abonnement",
       cancelPlan: "Se désabonner",
-      cancelPlanConfirm: "Annuler votre abonnement ?",
-      cancelPlanDone: "Abonnement annulé. Choisissez une formule pour continuer à utiliser Capil AI.",
+      cancelPlanConfirm:
+        "Résilier votre abonnement à la fin de la période en cours ? Vous conservez l'accès jusqu'à cette date.",
+      cancelPlanDone: "Abonnement résilié. Vous conservez l'accès jusqu'au {date}.",
+      cancelPlanScheduled: "Résiliation programmée — accès jusqu'au {date}.",
+      cancelPlanError: "Impossible de résilier l'abonnement. Réessayez ou contactez le support.",
+      cancelPlanLifetime:
+        "L'accès à vie ne peut pas être résilié en ligne. Contactez le support si besoin.",
+      cancelPlanNoBilling: "Cette formule n'est pas liée à un abonnement Stripe récurrent.",
+      cancelPlanCancelling: "Résiliation…",
       checkoutSuccess: "Paiement confirmé — votre abonnement est actif.",
       checkoutVerifyError: "Impossible de vérifier votre paiement. Contactez le support si vous avez été débité.",
       viewPlans: "Voir les offres Découverte / Essentiel / Premium",

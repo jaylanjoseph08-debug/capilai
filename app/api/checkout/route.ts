@@ -4,7 +4,12 @@ import type { Plan, BillingCycle } from "@/lib/subscriptionStore";
 import { apiError, apiNotConfigured, parseJsonBody } from "@/lib/apiErrors";
 import { getAuthUserFromRequest } from "@/lib/auth/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
-import { resolveStripePriceId, resolveStripeCheckoutMode, isLifetimeStripeCheckout } from "@/lib/stripe-prices";
+import {
+  getExpectedStripePriceEnvKey,
+  resolveStripePriceId,
+  resolveCheckoutModeForStripePrice,
+  isLifetimeStripeCheckout,
+} from "@/lib/stripe-prices";
 import type { CheckoutSuccessResponse } from "@/lib/stripe-types";
 
 export const runtime = "nodejs";
@@ -43,18 +48,26 @@ export async function POST(req: NextRequest) {
 
   const priceId = resolveStripePriceId(plan, billingCycle);
   if (!priceId) {
-    return NextResponse.json(
-      { configured: true, error: "Aucun Price ID Stripe configuré pour cette offre." },
-      { status: 400 }
+    const envKey = getExpectedStripePriceEnvKey(plan, billingCycle);
+    return apiError(
+      `Aucun Price ID Stripe configuré pour cette offre. Définissez ${envKey} sur Vercel.`,
+      400,
+      { code: "PRICE_NOT_CONFIGURED" }
     );
   }
 
   const stripe = getStripe();
   const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || req.nextUrl.origin;
-  const mode = resolveStripeCheckoutMode(plan, billingCycle, priceId);
-  const isLifetime = isLifetimeStripeCheckout(plan, billingCycle, priceId);
 
   try {
+    const price = await stripe.prices.retrieve(priceId);
+    if (!price.active) {
+      return apiError("Ce tarif Stripe est inactif.", 400, { code: "PRICE_INACTIVE" });
+    }
+
+    const mode = resolveCheckoutModeForStripePrice(price.type, plan, billingCycle, priceId);
+    const isLifetime = isLifetimeStripeCheckout(plan, billingCycle, priceId);
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       mode,

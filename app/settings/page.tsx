@@ -10,6 +10,14 @@ import { useHairAIStore } from "@/lib/store";
 import { useScannerStore } from "@/lib/scannerStore";
 import { useCalendarStore } from "@/lib/calendarStore";
 import { getSelectedPlan, useSubscriptionStore } from "@/lib/subscriptionStore";
+import { useSelectedPlan } from "@/lib/useSelectedPlan";
+import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
+import { cancelSubscriptionOnServer } from "@/lib/subscriptionCancel";
+import {
+  mirrorServerPlanToLocal,
+  syncSubscriptionFromServer,
+} from "@/lib/subscriptionSync";
+import { hasServerActiveSubscription } from "@/lib/subscriptionAccess";
 import { useLocaleStore, type Locale } from "@/lib/locale";
 import { LOCALE_LABELS } from "@/lib/i18n";
 import { useTranslation } from "@/lib/useTranslation";
@@ -148,15 +156,65 @@ function ProfilTab() {
 }
 
 function AbonnementTab() {
-  const { t, planLabel } = useTranslation();
-  const { plan, billingCycle, hasSelectedPlan, cancelSubscription } = useSubscriptionStore();
-  const selectedPlan = getSelectedPlan(plan, hasSelectedPlan);
-  const [cancelled, setCancelled] = useState(false);
+  const { t, planLabel, locale } = useTranslation();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const syncReady = useSubscriptionSyncStore((s) => s.ready);
+  const serverSubscription = useSubscriptionSyncStore((s) => s.serverSubscription);
+  const setServerSubscription = useSubscriptionSyncStore((s) => s.setServerSubscription);
+  const { billingCycle, hasSelectedPlan } = useSubscriptionStore();
+  const plan = useSelectedPlan();
+  const selectedPlan = plan ?? getSelectedPlan(useSubscriptionStore.getState().plan, hasSelectedPlan);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
-  function handleCancel() {
+  const canCancel = Boolean(serverSubscription?.canCancel);
+  const cancelAtPeriodEnd = Boolean(serverSubscription?.cancelAtPeriodEnd);
+  const periodEnd = serverSubscription?.currentPeriodEnd;
+
+  function formatPeriodEnd(iso: string | null | undefined): string {
+    if (!iso) return "—";
+    try {
+      return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
+        dateStyle: "long",
+      }).format(new Date(iso));
+    } catch {
+      return iso;
+    }
+  }
+
+  async function handleCancel() {
     if (!window.confirm(t("settings.cancelPlanConfirm"))) return;
-    cancelSubscription();
-    setCancelled(true);
+
+    setCancelling(true);
+    setError("");
+    setNotice("");
+
+    const result = await cancelSubscriptionOnServer();
+    if (!result.ok) {
+      setCancelling(false);
+      if (result.code === "LIFETIME_NOT_CANCELLABLE") {
+        setError(t("settings.cancelPlanLifetime"));
+        return;
+      }
+      if (result.code === "NO_STRIPE_SUBSCRIPTION") {
+        setError(t("settings.cancelPlanNoBilling"));
+        return;
+      }
+      setError(result.error ?? t("settings.cancelPlanError"));
+      return;
+    }
+
+    const payload = await syncSubscriptionFromServer();
+    if (payload) {
+      setServerSubscription(payload);
+      mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);
+    }
+
+    setCancelling(false);
+    setNotice(
+      t("settings.cancelPlanDone").replace("{date}", formatPeriodEnd(result.currentPeriodEnd ?? periodEnd))
+    );
   }
 
   return (
@@ -167,7 +225,7 @@ function AbonnementTab() {
           <span className="font-display text-2xl text-cream">
             {selectedPlan ? planLabel(selectedPlan) : t("settings.noPlan")}
           </span>
-          {selectedPlan && selectedPlan !== "free" && (
+          {selectedPlan && (
             <span className="font-body text-xs text-muted">
               {billingCycle === "monthly" ? t("settings.billingMonthly") : t("settings.billingAnnual")}
             </span>
@@ -175,9 +233,21 @@ function AbonnementTab() {
         </div>
       </div>
 
-      {cancelled && (
+      {cancelAtPeriodEnd && periodEnd && (
         <p className="mb-4 rounded-2xl border border-copper/30 bg-copper/10 p-3 text-center font-body text-xs text-cream/80">
-          {t("settings.cancelPlanDone")}
+          {t("settings.cancelPlanScheduled").replace("{date}", formatPeriodEnd(periodEnd))}
+        </p>
+      )}
+
+      {notice && (
+        <p className="mb-4 rounded-2xl border border-copper/30 bg-copper/10 p-3 text-center font-body text-xs text-cream/80">
+          {notice}
+        </p>
+      )}
+
+      {error && (
+        <p className="mb-4 rounded-2xl border border-copper/40 bg-copper/5 p-3 text-center font-body text-xs text-copper-light">
+          {error}
         </p>
       )}
 
@@ -187,20 +257,21 @@ function AbonnementTab() {
       >
         <div>
           <p className="font-body text-sm text-cream">
-            {!selectedPlan || selectedPlan === "free" ? t("settings.choosePlan") : t("settings.managePlan")}
+            {!selectedPlan ? t("settings.choosePlan") : t("settings.managePlan")}
           </p>
           <p className="mt-0.5 font-body text-xs text-muted">{t("settings.viewPlans")}</p>
         </div>
         <ChevronRight size={18} className="text-muted" />
       </Link>
 
-      {selectedPlan && selectedPlan !== "free" && (
+      {isAuthenticated && syncReady && canCancel && (
         <button
           type="button"
           onClick={handleCancel}
-          className="flex h-12 w-full items-center justify-center rounded-full border border-copper/30 font-body text-sm text-copper-light transition hover:bg-copper/10"
+          disabled={cancelling}
+          className="flex h-12 w-full items-center justify-center rounded-full border border-copper/30 font-body text-sm text-copper-light transition hover:bg-copper/10 disabled:opacity-60"
         >
-          {t("settings.cancelPlan")}
+          {cancelling ? t("settings.cancelPlanCancelling") : t("settings.cancelPlan")}
         </button>
       )}
     </div>

@@ -42,8 +42,24 @@ const LIFETIME_PRICE_ENV_KEYS = ["NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_LIFETIME"] as
 export const STRIPE_PLANS: Plan[] = ["free", "premium", "pro"];
 export const STRIPE_BILLING_CYCLES: BillingCycle[] = ["monthly", "annual"];
 
+/** Accept `NEXT_PUBLIC_*` and server-only `STRIPE_PRICE_*` aliases (Vercel). */
+function expandEnvKeys(keys: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const key of keys) {
+    out.push(key);
+    if (key.startsWith("NEXT_PUBLIC_")) {
+      out.push(key.slice("NEXT_PUBLIC_".length));
+    }
+  }
+  return out;
+}
+
+export function getExpectedStripePriceEnvKey(plan: Plan, billingCycle: BillingCycle): string {
+  return PRICE_ENV_KEYS[plan][billingCycle][0];
+}
+
 export function resolveStripePriceId(plan: Plan, billingCycle: BillingCycle): string | undefined {
-  for (const key of PRICE_ENV_KEYS[plan][billingCycle]) {
+  for (const key of expandEnvKeys(PRICE_ENV_KEYS[plan][billingCycle])) {
     const value = process.env[key]?.trim();
     if (value) return value;
   }
@@ -64,10 +80,22 @@ export function isStripePriceConfigured(plan: Plan, billingCycle: BillingCycle):
 }
 
 export function getStripePriceEnvKey(plan: Plan, billingCycle: BillingCycle): string | undefined {
-  for (const key of PRICE_ENV_KEYS[plan][billingCycle]) {
+  for (const key of expandEnvKeys(PRICE_ENV_KEYS[plan][billingCycle])) {
     if (process.env[key]?.trim()) return key;
   }
   return undefined;
+}
+
+/** Stripe Checkout mode must match the Price type (recurring vs one-time). */
+export function resolveCheckoutModeForStripePrice(
+  priceType: string,
+  plan: Plan,
+  billingCycle: BillingCycle,
+  priceId: string
+): "payment" | "subscription" {
+  if (priceType === "recurring") return "subscription";
+  if (isLifetimeStripeCheckout(plan, billingCycle, priceId)) return "payment";
+  return "payment";
 }
 
 export function resolveLifetimeStripePriceId(): string | undefined {
@@ -92,6 +120,7 @@ export function isLifetimeStripeCheckout(
   return isLifetimePrice(plan, billingCycle) && isLifetimeStripePriceId(priceId);
 }
 
+/** @deprecated Prefer resolveCheckoutModeForStripePrice after retrieving the Price. */
 export function resolveStripeCheckoutMode(
   plan: Plan,
   billingCycle: BillingCycle,

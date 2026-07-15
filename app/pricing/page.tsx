@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +18,14 @@ import { useTranslation } from "@/lib/useTranslation";
 import { CheckoutSuccessSync } from "@/components/CheckoutSuccessSync";
 
 const MAX_ANNUAL_SAVINGS = Math.max(...(["free", "premium", "pro"] as Plan[]).map(annualSavingsPercent));
+
+type CheckoutAvailability = Record<Plan, Record<BillingCycle, boolean>>;
+
+const EMPTY_AVAILABILITY: CheckoutAvailability = {
+  free: { monthly: false, annual: false },
+  premium: { monthly: false, annual: false },
+  pro: { monthly: false, annual: false },
+};
 
 export default function PricingPage() {
   return (
@@ -45,13 +53,42 @@ function PricingContent() {
   const [coupon, setCoupon] = useState("");
   const [loadingPlan, setLoadingPlan] = useState<Plan | null>(null);
   const [notice, setNotice] = useState("");
+  const [checkoutAvailability, setCheckoutAvailability] = useState<CheckoutAvailability>(EMPTY_AVAILABILITY);
+  const [checkoutConfigLoaded, setCheckoutConfigLoaded] = useState(false);
 
   const discount = coupon.trim().toUpperCase() === "MECHE10" ? 0.1 : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCheckoutConfig() {
+      try {
+        const res = await fetch("/api/checkout/config", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { plans?: CheckoutAvailability };
+        if (!cancelled && data.plans) {
+          setCheckoutAvailability(data.plans);
+        }
+      } catch {
+        // ignore — checkout API will surface errors on click
+      } finally {
+        if (!cancelled) setCheckoutConfigLoaded(true);
+      }
+    }
+    void loadCheckoutConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleChoose(plan: Plan) {
     if (isSupabaseConfigured() && !isAuthenticated) {
       const returnTo = `${window.location.pathname}${window.location.search}`;
       router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      return;
+    }
+
+    if (checkoutConfigLoaded && !checkoutAvailability[plan][cycle]) {
+      setNotice(t("pricing.checkoutNotConfigured"));
       return;
     }
 
@@ -68,6 +105,11 @@ function PricingContent() {
     if (result.code === "AUTH_REQUIRED") {
       const returnTo = `${window.location.pathname}${window.location.search}`;
       router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      return;
+    }
+
+    if (result.code === "PRICE_NOT_CONFIGURED") {
+      setNotice(result.error ?? t("pricing.checkoutNotConfigured"));
       return;
     }
 
@@ -165,6 +207,7 @@ function PricingContent() {
               discount={discount}
               isCurrent={hasSelectedPlan && currentPlan === plan}
               isHighlighted={highlightPlan === plan}
+              checkoutAvailable={!checkoutConfigLoaded || checkoutAvailability[plan][cycle]}
               loading={loadingPlan === plan}
               onChoose={() => handleChoose(plan)}
               label={planLabel(plan)}
@@ -205,6 +248,7 @@ function PlanCard({
   discount,
   isCurrent,
   isHighlighted,
+  checkoutAvailable = true,
   loading,
   onChoose,
   label,
@@ -217,6 +261,7 @@ function PlanCard({
   discount: number;
   isCurrent: boolean;
   isHighlighted?: boolean;
+  checkoutAvailable?: boolean;
   loading: boolean;
   onChoose: () => void;
   label: string;
@@ -326,15 +371,17 @@ function PlanCard({
 
       <button
         onClick={onChoose}
-        disabled={isCurrent || loading}
+        disabled={isCurrent || loading || !checkoutAvailable}
         className={`flex h-12 w-full items-center justify-center rounded-full font-body text-sm font-semibold transition active:scale-[0.98] disabled:active:scale-100 ${
           emphasized
             ? "bg-copper-gradient text-ink shadow-glow"
             : "border border-line text-cream hover:border-copper/50"
-        } ${isCurrent ? "opacity-60" : ""}`}
+        } ${isCurrent || !checkoutAvailable ? "opacity-60" : ""}`}
       >
         {isCurrent
           ? t("pricing.currentPlan")
+          : !checkoutAvailable
+            ? t("pricing.checkoutNotConfigured")
           : loading
             ? t("pricing.redirecting")
             : t("pricing.choosePlan").replace("{plan}", label)}
