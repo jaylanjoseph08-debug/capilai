@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { getAuthRedirectUrl, getSupabase, isSupabaseConfigured } from "./supabase/client";
+import { parseSupabaseAuthError } from "./supabase/auth-errors";
 import { mapSupabaseUser } from "./supabase/user";
 
 export interface AuthUser {
@@ -136,7 +137,16 @@ export const useAuthStore = create<AuthState>()((set) => ({
         redirectTo: getAuthRedirectUrl(nextPath),
       },
     });
-    if (error) return { error: error.message };
+    if (error) {
+      const code = parseSupabaseAuthError(error.message);
+      if (code === "provider_not_enabled") {
+        console.error(
+          "[auth] Google OAuth is disabled in Supabase. Enable it at:",
+          "https://supabase.com/dashboard → Authentication → Providers → Google"
+        );
+      }
+      return { error: code };
+    }
     return {};
   },
 

@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/lib/authStore";
 import { isDiagnosisOnboardingPath, resolvePostLoginPath } from "@/lib/postAuthRedirect";
+import { resolveAuthErrorMessage } from "@/lib/supabase/auth-errors";
 import { OAuthButton } from "@/components/ui/BrandMarks";
 import { useTranslation } from "@/lib/useTranslation";
 
 function resolveAuthError(t: (key: import("@/lib/i18n").TranslationKey) => string, code: string) {
-  if (code === "not_configured") return t("auth.login.notConfigured");
-  return code || t("auth.login.authFailed");
+  return resolveAuthErrorMessage(t, code);
 }
 
 export default function LoginPage() {

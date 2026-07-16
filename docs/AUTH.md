@@ -19,8 +19,9 @@ localStorage (JWT + refresh token)
 In `.env.local`:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://capilai.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_or_publishable_key
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 Optional (server-only, not used by the client auth flow yet):
@@ -66,7 +67,13 @@ Add these under **Authentication → URL Configuration → Redirect URLs**:
 In your OAuth client **Authorized redirect URIs**, include Supabase's callback:
 
 ```
-https://capilai.supabase.co/auth/v1/callback
+https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback
+```
+
+Example for project `khxlclcfpaetdkekriwi`:
+
+```
+https://khxlclcfpaetdkekriwi.supabase.co/auth/v1/callback
 ```
 
 Enable Google provider in **Supabase → Authentication → Providers → Google** with your Client ID and Secret.
@@ -116,6 +123,7 @@ Configured in `lib/supabase/client.ts`:
 
 | Issue | Fix |
 |-------|-----|
+| `Unsupported provider: provider is not enabled` | Enable **Google** under Supabase → Authentication → Providers and add OAuth Client ID + Secret |
 | `redirect_uri_mismatch` | Add Supabase callback URL in Google Console |
 | Returns to login with error | Check Supabase redirect URLs include `/auth/callback` |
 | `not_configured` in UI | Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` |

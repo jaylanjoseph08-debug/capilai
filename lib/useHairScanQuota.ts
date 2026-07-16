@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuthStore } from "./authStore";
-import { hasPrivateAccess } from "./privateAccess";
 import {
   buildHairScanQuotaStatus,
   type HairScanQuotaStatus,
@@ -20,12 +19,6 @@ export function useHairScanQuota() {
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (hasPrivateAccess()) {
-      setStatus({ allowed: true, scansUsed: 0, scansLimit: null, remaining: null });
-      setReady(true);
-      return;
-    }
-
     if (!isAuthenticated) {
       setStatus({ allowed: plan === null, scansUsed: 0, scansLimit: null, remaining: null });
       setReady(true);
@@ -56,14 +49,14 @@ export function useHairScanQuota() {
     void refresh();
   }, [refresh]);
 
-  const requiresAuth = !hasPrivateAccess() && !isAuthenticated;
+  const requiresAuth = !isAuthenticated;
 
   const canStart = ready
     ? canStartHairScanLocally(plan, status, { requiresAuth })
     : false;
 
   const consume = useCallback(async (): Promise<HairScanQuotaStatus | null> => {
-    if (plan === null || hasPrivateAccess()) {
+    if (plan === null) {
       return status;
     }
 

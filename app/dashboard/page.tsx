@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ScanLine, PackagePlus, CalendarDays, ScrollText, Camera, History } from "lucide-react";
 import { useHairAIStore } from "@/lib/store";
 import { useAuthStore } from "@/lib/authStore";
@@ -20,6 +20,7 @@ import { BottomNav } from "@/components/ui/BottomNav";
 import { useTranslation } from "@/lib/useTranslation";
 import { pricingUrlForScanLimit, loginUrlForScan } from "@/lib/hairScanQuota";
 import { useHairScanQuota } from "@/lib/useHairScanQuota";
+import { CheckoutSuccessSync } from "@/components/CheckoutSuccessSync";
 
 export default function DashboardPage() {
   return (
@@ -31,7 +32,12 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { locale, t } = useTranslation();
+  // Stripe success_url lands here with ?checkout=success&session_id=… —
+  // hold off the paid-access guard while CheckoutSuccessSync activates the plan.
+  const activatingCheckout =
+    searchParams.get("checkout") === "success" && Boolean(searchParams.get("session_id")?.trim());
   const plan = useSelectedPlan();
   const { canStart, requiresAuth } = useHairScanQuota();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -46,11 +52,20 @@ function DashboardContent() {
   );
 
   useEffect(() => {
-    if (!syncReady) return;
+    if (!syncReady || activatingCheckout) return;
     if (profile && !hasPaidAccess(plan)) {
       router.replace("/pricing?from=diagnostic");
     }
-  }, [profile, plan, syncReady, router]);
+  }, [profile, plan, syncReady, activatingCheckout, router]);
+
+  if (activatingCheckout && (!syncReady || !hasPaidAccess(plan))) {
+    return (
+      <main className="flex min-h-screen flex-col justify-center bg-ink-radial px-6 pb-24">
+        <p className="mb-6 text-center font-display text-lg italic text-cream">Capil AI</p>
+        <CheckoutSuccessSync redirectPath="/dashboard" />
+      </main>
+    );
+  }
 
   if (!syncReady || waitingForProfile) {
     return null;
@@ -72,7 +87,9 @@ function DashboardContent() {
     router.push("/scan");
   }
 
-  if (!profile) {
+  // Subscribed but no analysis yet — show score 0 and invite the first scan.
+  // Non-subscribers without a profile keep the simple empty state.
+  if (!profile && !hasPaidAccess(plan)) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-ink-radial px-6 pb-24 text-center">
         <h1 className="font-display text-2xl text-cream">{t("dashboard.noProfileTitle")}</h1>
@@ -83,7 +100,7 @@ function DashboardContent() {
         >
           {t("dashboard.startDiagnostic")}
         </Link>
-        {(!isAuthenticated || hasPaidAccess(plan)) && (
+        {!isAuthenticated && (
           <Link href="/scanner" className="font-body text-xs text-muted underline underline-offset-2 hover:text-copper-light">
             {t("dashboard.scanWithoutDiagnostic")}
           </Link>
@@ -92,6 +109,9 @@ function DashboardContent() {
       </main>
     );
   }
+
+  const awaitingFirstAnalysis = !profile;
+  const displayScore = profile?.score ?? 0;
 
   return (
     <main className="min-h-screen bg-ink-radial pb-28">
@@ -133,46 +153,62 @@ function DashboardContent() {
         </div>
 
         <div className="glass mb-6 flex flex-col items-center rounded-4xl py-8">
-          <StrandGauge score={profile.score} label={t("common.scoreLabel")} />
+          <StrandGauge score={displayScore} label={t("common.scoreLabel")} />
           <p className="mt-4 px-8 text-center font-body text-xs leading-relaxed text-muted">
-            {profile.report.summary}
+            {awaitingFirstAnalysis
+              ? t("dashboard.awaitingFirstAnalysis")
+              : profile.report.summary}
           </p>
-          <Link
-            href="/report"
-            className="mt-6 flex h-12 w-full max-w-xs items-center justify-center rounded-full bg-copper-gradient px-8 font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98]"
-          >
-            {t("dashboard.viewReport")}
-          </Link>
+          {awaitingFirstAnalysis ? (
+            <button
+              type="button"
+              onClick={handleScanHairClick}
+              className="mt-6 flex h-12 w-full max-w-xs items-center justify-center rounded-full bg-copper-gradient px-8 font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98]"
+            >
+              {t("dashboard.startFirstAnalysis")}
+            </button>
+          ) : (
+            <Link
+              href="/report"
+              className="mt-6 flex h-12 w-full max-w-xs items-center justify-center rounded-full bg-copper-gradient px-8 font-body text-sm font-semibold text-ink shadow-glow transition active:scale-[0.98]"
+            >
+              {t("dashboard.viewReport")}
+            </Link>
+          )}
         </div>
 
-        <h2 className="mb-3 font-display text-lg text-cream">{t("dashboard.yourMetrics")}</h2>
-        <div className="mb-8 grid grid-cols-2 gap-3">
-          {Object.entries(profile.metrics).map(([key, value], i) => (
-            <MetricCard
-              key={key}
-              label={metricLabels[key]?.label ?? key}
-              value={value}
-              hint={metricLabels[key]?.hint ?? ""}
-              delay={i * 0.05}
-            />
-          ))}
-        </div>
+        {!awaitingFirstAnalysis && profile && (
+          <>
+            <h2 className="mb-3 font-display text-lg text-cream">{t("dashboard.yourMetrics")}</h2>
+            <div className="mb-8 grid grid-cols-2 gap-3">
+              {Object.entries(profile.metrics).map(([key, value], i) => (
+                <MetricCard
+                  key={key}
+                  label={metricLabels[key]?.label ?? key}
+                  value={value}
+                  hint={metricLabels[key]?.hint ?? ""}
+                  delay={i * 0.05}
+                />
+              ))}
+            </div>
 
-        <h2 className="mb-3 font-display text-lg text-cream">{t("dashboard.priorities")}</h2>
-        <div className="mb-8 flex flex-wrap gap-2">
-          {profile.priorities.map((p) => (
-            <span key={p} className="rounded-full border border-copper/30 bg-copper/10 px-4 py-2 font-body text-xs text-copper-light">
-              {p}
-            </span>
-          ))}
-        </div>
+            <h2 className="mb-3 font-display text-lg text-cream">{t("dashboard.priorities")}</h2>
+            <div className="mb-8 flex flex-wrap gap-2">
+              {profile.priorities.map((p) => (
+                <span key={p} className="rounded-full border border-copper/30 bg-copper/10 px-4 py-2 font-body text-xs text-copper-light">
+                  {p}
+                </span>
+              ))}
+            </div>
 
-        <h2 className="mb-3 font-display text-lg text-cream">{t("dashboard.dailyRoutine")}</h2>
-        <div className="glass rounded-3xl p-5">
-          <RoutineBlock title={t("dashboard.morning")} items={profile.routine.morning} />
-          <RoutineBlock title={t("dashboard.evening")} items={profile.routine.evening} />
-          <RoutineBlock title={t("dashboard.washDay")} items={profile.routine.washDay} last />
-        </div>
+            <h2 className="mb-3 font-display text-lg text-cream">{t("dashboard.dailyRoutine")}</h2>
+            <div className="glass rounded-3xl p-5">
+              <RoutineBlock title={t("dashboard.morning")} items={profile.routine.morning} />
+              <RoutineBlock title={t("dashboard.evening")} items={profile.routine.evening} />
+              <RoutineBlock title={t("dashboard.washDay")} items={profile.routine.washDay} last />
+            </div>
+          </>
+        )}
       </div>
       <BottomNav />
     </main>

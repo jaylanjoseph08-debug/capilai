@@ -1,6 +1,5 @@
 "use client";
 
-import { hasPrivateAccess } from "./privateAccess";
 import { hasPaidAccess, hasServerActiveSubscription } from "./subscriptionAccess";
 import {
   mirrorServerPlanToLocal,
@@ -22,8 +21,6 @@ export function isDiagnosisOnboardingPath(path: string | null | undefined): bool
 
 /** Where "Start my diagnosis" should send the user (account first, then questionnaire). */
 export function resolveDiagnosisEntryPath(): string {
-  if (hasPrivateAccess()) return DIAGNOSIS_ONBOARDING_PATH;
-
   const { isAuthenticated } = useAuthStore.getState();
   if (isAuthenticated) return DIAGNOSIS_ONBOARDING_PATH;
 
@@ -32,7 +29,6 @@ export function resolveDiagnosisEntryPath(): string {
 
 /** Resolves where to send the user right after a successful login. */
 export async function resolvePostLoginPath(intendedPath = "/dashboard"): Promise<string> {
-  if (hasPrivateAccess()) return intendedPath;
   if (!isSupabaseConfigured()) return intendedPath;
 
   await waitForAccessToken();
@@ -50,8 +46,6 @@ export async function resolvePostLoginPath(intendedPath = "/dashboard"): Promise
 
 /** Resolves where to send the user when opening their profile from the home page. */
 export async function resolveProfileEntryPath(): Promise<string> {
-  if (hasPrivateAccess()) return "/dashboard";
-
   const isAuthenticated = useAuthStore.getState().isAuthenticated;
   if (isAuthenticated) {
     const path = await resolvePostLoginPath("/dashboard");

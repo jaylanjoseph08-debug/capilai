@@ -1,5 +1,4 @@
 import type { Plan } from "./subscriptionStore";
-import { hasPrivateAccess } from "./privateAccess";
 import type { HairScanQuotaStatus } from "./hairScanLimits";
 
 export { HAIR_SCAN_LIMITS, buildHairScanQuotaStatus, type HairScanQuotaStatus } from "./hairScanLimits";
@@ -9,7 +8,6 @@ export function canStartHairScanLocally(
   status: HairScanQuotaStatus | null,
   options?: { requiresAuth?: boolean }
 ): boolean {
-  if (hasPrivateAccess()) return true;
   if (options?.requiresAuth) return false;
   // Initial diagnostic before any server subscription.
   if (plan === null) return true;

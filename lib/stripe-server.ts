@@ -20,6 +20,9 @@ export function getStripe(): Stripe {
       throw new Error("STRIPE_SECRET_KEY is not set");
     }
     try {
+      // Pin to the API version bundled with the installed SDK. Forcing a newer version
+      // (e.g. "2026-05-27.dahlia") changes response shapes — notably `current_period_end`
+      // moved off the Subscription object — and breaks the SDK's TypeScript types.
       stripeClient = new Stripe(secretKey, {
         apiVersion: "2024-06-20",
         typescript: true,

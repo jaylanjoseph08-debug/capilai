@@ -9,7 +9,6 @@ export const STORAGE_KEYS = {
   scanner: `${APP_SLUG}-scanner-storage`,
   calendar: `${APP_SLUG}-calendar-storage`,
   subscription: `${APP_SLUG}-subscription-storage`,
-  privateAccess: `${APP_SLUG}-private-access`,
 } as const;
 
 /** One-time localStorage migrations from previous project ids. */

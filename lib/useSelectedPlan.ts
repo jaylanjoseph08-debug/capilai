@@ -1,7 +1,6 @@
 "use client";
 
 import type { Plan } from "./subscriptionStore";
-import { hasPrivateAccess } from "./privateAccess";
 import { isSupabaseConfigured } from "./supabase/client";
 import { useAuthStore } from "./authStore";
 import { hasServerActiveSubscription } from "./subscriptionAccess";
@@ -14,10 +13,6 @@ export function useSelectedPlan(): Plan | null {
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
   const serverSubscription = useSubscriptionSyncStore((s) => s.serverSubscription);
   const localPlan = useSubscriptionStore((s) => getSelectedPlan(s.plan, s.hasSelectedPlan));
-
-  if (hasPrivateAccess()) {
-    return localPlan ?? "pro";
-  }
 
   if (isSupabaseConfigured() && isAuthenticated) {
     if (!syncReady) return null;

@@ -31,7 +31,7 @@ export async function startCheckout(plan: Plan, billingCycle: BillingCycle): Pro
       body: JSON.stringify(payload),
     });
 
-    const data = (await res.json()) as CheckoutResponse & { error?: string };
+    const data = (await res.json()) as CheckoutResponse & { error?: string; code?: string };
 
     if (!res.ok) {
       return {

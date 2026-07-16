@@ -34,7 +34,6 @@ const translations = {
       ctaStart: "Start my diagnosis",
       ctaLogin: "I already have an account",
       ctaProfile: "My profile",
-      ctaPrivateAccess: "Private access",
     },
     nav: {
       profile: "Profile",
@@ -59,6 +58,10 @@ const translations = {
         notConfigured: "Authentication is not configured. Check Supabase env variables.",
         noAccount: "Don't have an account?",
         createAccount: "Create an account",
+      },
+      oauth: {
+        providerNotEnabled:
+          "Google sign-in is not enabled on this Supabase project. In the Supabase dashboard, open Authentication → Providers → Google, turn it on, and add your Google OAuth Client ID and Secret.",
       },
       callback: {
         signingIn: "Signing you in…",
@@ -128,6 +131,9 @@ const translations = {
     dashboard: {
       noProfileTitle: "No diagnosis yet",
       noProfileText: "Run your first analysis to generate your Hair Profile.",
+      awaitingFirstAnalysis:
+        "Your hair score is 0 — complete your first analysis to unlock your Hair Profile.",
+      startFirstAnalysis: "Start my first analysis",
       startDiagnostic: "Start diagnosis",
       scanWithoutDiagnostic: "Or scan a product without a diagnosis",
       scanHair: "Hair scan",
@@ -196,18 +202,6 @@ const translations = {
       free: "Discovery",
       premium: "Essential",
       pro: "Premium",
-    },
-    privateAccess: {
-      back: "Home",
-      title: "Private access",
-      subtitle: "Enter your access code to explore the app without a subscription.",
-      placeholder: "Access code",
-      submit: "Unlock",
-      active: "Private access is active on this browser.",
-      openApp: "Open dashboard",
-      deactivate: "Deactivate private access",
-      invalidCode: "Invalid access code.",
-      notConfigured: "Private access is not configured on this environment.",
     },
     settings: {
       back: "Dashboard",
@@ -407,7 +401,6 @@ const translations = {
       ctaStart: "Commencer mon diagnostic",
       ctaLogin: "J'ai déjà un compte",
       ctaProfile: "Mon profil",
-      ctaPrivateAccess: "Accès privé",
     },
     nav: {
       profile: "Profil",
@@ -432,6 +425,10 @@ const translations = {
         notConfigured: "Authentification non configurée. Vérifiez les variables Supabase.",
         noAccount: "Pas encore de compte ?",
         createAccount: "Créer un compte",
+      },
+      oauth: {
+        providerNotEnabled:
+          "La connexion Google n'est pas activée sur ce projet Supabase. Ouvrez le dashboard Supabase → Authentication → Providers → Google, activez-le, puis renseignez le Client ID et le Secret OAuth Google.",
       },
       callback: {
         signingIn: "Connexion en cours…",
@@ -501,6 +498,9 @@ const translations = {
     dashboard: {
       noProfileTitle: "Aucun diagnostic pour l'instant",
       noProfileText: "Lancez votre première analyse pour générer votre Hair Profile.",
+      awaitingFirstAnalysis:
+        "Votre score capillaire est à 0 — réalisez votre première analyse pour débloquer votre Hair Profile.",
+      startFirstAnalysis: "Lancer ma première analyse",
       startDiagnostic: "Démarrer le diagnostic",
       scanWithoutDiagnostic: "Ou scanner un produit sans diagnostic",
       scanHair: "Scan cheveux",
@@ -569,18 +569,6 @@ const translations = {
       free: "Découverte",
       premium: "Essentiel",
       pro: "Premium",
-    },
-    privateAccess: {
-      back: "Home",
-      title: "Private access",
-      subtitle: "Enter your access code to explore the app without a subscription.",
-      placeholder: "Access code",
-      submit: "Unlock",
-      active: "Private access is active on this browser.",
-      openApp: "Open dashboard",
-      deactivate: "Deactivate private access",
-      invalidCode: "Invalid access code.",
-      notConfigured: "Private access is not configured on this environment.",
     },
     settings: {
       back: "Dashboard",

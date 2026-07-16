@@ -6,6 +6,7 @@ import {
   getSubscriptionByUserId,
   isActiveSubscriptionStatus,
   mapStripeSubscriptionStatus,
+  resolveSubscriptionPeriodEnd,
   upsertSubscription,
 } from "@/lib/subscription-db";
 import { apiError, apiNotConfigured } from "@/lib/apiErrors";
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    const currentPeriodEnd = resolveSubscriptionPeriodEnd(subscription);
 
     await upsertSubscription(admin, {
       userId: authUser.id,
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
       configured: true,
       ok: true,
       cancelAtPeriodEnd: true,
-      currentPeriodEnd: currentPeriodEnd.toISOString(),
+      currentPeriodEnd: currentPeriodEnd?.toISOString() ?? null,
     };
     return NextResponse.json(response);
   } catch (error) {

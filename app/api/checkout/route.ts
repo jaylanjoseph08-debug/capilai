@@ -69,7 +69,6 @@ export async function POST(req: NextRequest) {
     const isLifetime = isLifetimeStripeCheckout(plan, billingCycle, priceId);
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card"],
       mode,
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: {
@@ -78,7 +77,7 @@ export async function POST(req: NextRequest) {
         ...(isLifetime ? { purchaseType: "lifetime" } : {}),
       },
       allow_promotion_codes: true,
-      success_url: `${origin}/pricing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing?checkout=cancelled`,
     };
 
@@ -112,8 +111,25 @@ export async function POST(req: NextRequest) {
     };
     return NextResponse.json(response);
   } catch (error) {
-    const message = error instanceof Stripe.errors.StripeError ? error.message : "Internal Server Error";
-    console.error("[checkout]", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (error instanceof Stripe.errors.StripeError) {
+      console.error("[checkout] Stripe error", {
+        type: error.type,
+        code: error.code,
+        param: error.param,
+        message: error.message,
+        userId: authUser.id,
+        plan,
+        billingCycle,
+      });
+      return apiError(error.message || "Stripe checkout failed", 502, { code: "STRIPE_ERROR" });
+    }
+
+    console.error("[checkout] unexpected error", {
+      error,
+      userId: authUser.id,
+      plan,
+      billingCycle,
+    });
+    return apiError("Internal checkout error", 500, { code: "CHECKOUT_INTERNAL_ERROR" });
   }
 }

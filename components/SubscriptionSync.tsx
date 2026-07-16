@@ -9,7 +9,6 @@ import {
 } from "@/lib/subscriptionSync";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { hasPrivateAccess } from "@/lib/privateAccess";
 
 /** Loads subscription status from Supabase after auth — server is the source of truth. */
 export function SubscriptionSync() {
@@ -21,11 +20,6 @@ export function SubscriptionSync() {
   const setServerSubscription = useSubscriptionSyncStore((s) => s.setServerSubscription);
 
   useEffect(() => {
-    if (hasPrivateAccess()) {
-      markReady();
-      return;
-    }
-
     if (!isSupabaseConfigured() || !isConfigured) {
       markReady();
       return;
@@ -46,6 +40,15 @@ export function SubscriptionSync() {
       const result = await syncSubscriptionFromServer();
       const payload = result.payload;
       if (cancelled) return;
+
+      // A checkout activation (CheckoutSuccessSync) may have completed while this
+      // sync was in flight — never downgrade an active subscription with a stale
+      // "inactive" payload, or the dashboard guard bounces the user back to /pricing.
+      const current = useSubscriptionSyncStore.getState().serverSubscription;
+      if (hasServerActiveSubscription(current) && !hasServerActiveSubscription(payload)) {
+        markReady();
+        return;
+      }
 
       setServerSubscription(payload);
       mirrorServerPlanToLocal(hasServerActiveSubscription(payload) ? payload : null);

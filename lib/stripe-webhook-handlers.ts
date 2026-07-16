@@ -10,6 +10,7 @@ import {
   resolveCheckoutPlan,
   resolveLifetimeFromSession,
   resolvePriceIdFromSession,
+  resolveSubscriptionPeriodEnd,
   resolveUserIdFromCheckoutSession,
   stripeCustomerIdFromSession,
   stripeSubscriptionIdFromSession,
@@ -24,27 +25,53 @@ export async function handleCheckoutSessionCompleted(
   admin: SupabaseClient,
   sessionInput: Stripe.Checkout.Session
 ): Promise<void> {
+  const tag = "[stripe webhook][checkout.session.completed]";
+  console.info(`${tag} ▶ start — session id: ${sessionInput.id}`);
+
   const session = await stripe.checkout.sessions.retrieve(sessionInput.id, {
     expand: ["line_items.data.price", "subscription", "customer"],
   });
+  console.info(`${tag} session retrieved from Stripe:`, {
+    id: session.id,
+    payment_status: session.payment_status,
+    status: session.status,
+    mode: session.mode,
+    metadata: session.metadata,
+    client_reference_id: session.client_reference_id,
+    customer: typeof session.customer === "string" ? session.customer : session.customer?.id ?? null,
+    subscription:
+      typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null,
+    customer_email: session.customer_details?.email ?? session.customer_email ?? null,
+  });
 
   if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
-    console.warn("[stripe webhook] checkout.session.completed — payment not completed", session.id);
+    console.warn(
+      `${tag} ⏸ STOP — payment_status is "${session.payment_status}" (expected "paid" or "no_payment_required"). Nothing written to Supabase.`
+    );
     return;
   }
 
   const plan = resolveCheckoutPlan(session);
   const billingCycle = resolveCheckoutBillingCycle(session);
+  console.info(`${tag} resolved plan/billingCycle from session:`, { plan, billingCycle });
   if (!plan || !billingCycle) {
-    console.error("[stripe webhook] checkout.session.completed — missing plan metadata", session.id);
+    console.error(
+      `${tag} ❌ STOP — could not resolve plan or billingCycle.\n` +
+        "  → Check that checkout session metadata.plan / metadata.billingCycle were set at creation,\n" +
+        "  → or that the line item price id matches one of your NEXT_PUBLIC_STRIPE_PRICE_* env vars.",
+      { sessionId: session.id, metadata: session.metadata }
+    );
     return;
   }
 
   const userId = await resolveUserIdFromCheckoutSession(admin, session);
+  console.info(`${tag} resolved Supabase user id:`, userId ?? "(none — will try email fallback)");
+
   const priceId = resolvePriceIdFromSession(session);
   const isLifetime = resolveLifetimeFromSession(session, priceId);
   const stripeCustomerId = stripeCustomerIdFromSession(session);
   const stripeSubscriptionId = isLifetime ? null : stripeSubscriptionIdFromSession(session);
+  console.info(`${tag} derived Stripe ids:`, { priceId, isLifetime, stripeCustomerId, stripeSubscriptionId });
 
   let status: SubscriptionStatus = isLifetime ? "lifetime" : "active";
   let currentPeriodEnd: Date | null = null;
@@ -52,17 +79,30 @@ export async function handleCheckoutSessionCompleted(
   if (!isLifetime && stripeSubscriptionId) {
     const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
     status = mapStripeSubscriptionStatus(subscription.status);
-    currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    currentPeriodEnd = resolveSubscriptionPeriodEnd(subscription);
+    console.info(`${tag} subscription details from Stripe:`, {
+      stripeStatus: subscription.status,
+      mappedStatus: status,
+      currentPeriodEnd,
+    });
   }
 
   if (!userId) {
     const email = checkoutEmailFromSession(session);
     if (!email) {
-      console.error("[stripe webhook] checkout.session.completed — no user or email", session.id);
+      console.error(
+        `${tag} ❌ STOP — no supabase_user_id / client_reference_id AND no customer email on the session.\n` +
+          "  → This means the Checkout Session was created without linking the logged-in user (see app/api/checkout/route.ts)."
+      );
       return;
     }
 
-    await upsertPendingSubscription(admin, {
+    console.warn(
+      `${tag} ⚠ no userId resolved — writing to pending_subscriptions for email "${email}" instead of subscriptions.\n` +
+        "  → This row will only attach to a real user on next login/signup with this email (see linkPendingSubscriptionForEmail)."
+    );
+
+    const { error } = await upsertPendingSubscription(admin, {
       email,
       plan,
       status,
@@ -72,10 +112,25 @@ export async function handleCheckoutSessionCompleted(
       stripePriceId: priceId,
       currentPeriodEnd: isLifetime ? null : currentPeriodEnd,
     });
+
+    if (error) {
+      console.error(`${tag} ❌ Supabase upsertPendingSubscription FAILED:`, error);
+    } else {
+      console.info(`${tag} ✅ pending_subscriptions row written for "${email}"`);
+    }
     return;
   }
 
-  await upsertSubscription(admin, {
+  console.info(`${tag} writing to public.subscriptions via service role client...`, {
+    userId,
+    plan,
+    status,
+    billingCycle,
+    stripeCustomerId,
+    stripeSubscriptionId,
+  });
+
+  const { error } = await upsertSubscription(admin, {
     userId,
     plan,
     status,
@@ -85,6 +140,15 @@ export async function handleCheckoutSessionCompleted(
     stripePriceId: priceId,
     currentPeriodEnd: isLifetime ? null : currentPeriodEnd,
   });
+
+  if (error) {
+    console.error(
+      `${tag} ❌ Supabase upsertSubscription FAILED — this is very likely why the app keeps redirecting to /pricing:`,
+      error
+    );
+  } else {
+    console.info(`${tag} ✅ SUCCESS — subscriptions row upserted for user ${userId} (plan: ${plan}, status: ${status})`);
+  }
 }
 
 export async function handleInvoicePaymentSucceeded(
@@ -137,7 +201,7 @@ export async function handleInvoicePaymentSucceeded(
       typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null,
     stripeSubscriptionId: subscriptionId,
     stripePriceId: priceId,
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    currentPeriodEnd: resolveSubscriptionPeriodEnd(subscription),
   });
 }
 
@@ -164,7 +228,7 @@ export async function handleSubscriptionUpdated(
       typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null,
     stripeSubscriptionId: subscriptionId,
     stripePriceId: priceId,
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    currentPeriodEnd: resolveSubscriptionPeriodEnd(subscription),
   });
 }
 

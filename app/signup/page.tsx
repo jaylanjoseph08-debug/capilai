@@ -5,17 +5,17 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/lib/authStore";
 import { DIAGNOSIS_ONBOARDING_PATH } from "@/lib/postAuthRedirect";
+import { resolveAuthErrorMessage } from "@/lib/supabase/auth-errors";
 import { OAuthButton } from "@/components/ui/BrandMarks";
 import { useTranslation } from "@/lib/useTranslation";
 
 const DEFAULT_POST_SIGNUP_PATH = "/pricing";
 
 function resolveAuthError(t: (key: import("@/lib/i18n").TranslationKey) => string, code: string) {
-  if (code === "not_configured") return t("auth.signup.notConfigured");
   if (code === "already_registered") return t("auth.signup.alreadyRegistered");
   if (/rate limit/i.test(code)) return t("auth.signup.emailRateLimit");
   if (/error sending confirmation email/i.test(code)) return t("auth.signup.emailSendFailed");
-  return code || t("auth.signup.authFailed");
+  return resolveAuthErrorMessage(t, code, "auth.signup.authFailed");
 }
 
 export default function SignupPage() {

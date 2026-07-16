@@ -11,7 +11,6 @@ import { useAuthStore } from "@/lib/authStore";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { hasPaidAccess, hasServerActiveSubscription } from "@/lib/subscriptionAccess";
-import { hasPrivateAccess } from "@/lib/privateAccess";
 import { mirrorServerPlanToLocal, syncSubscriptionFromServer } from "@/lib/subscriptionSync";
 import { PLAN_PRICES, getPlanFeatures, annualSavingsPercent, formatPrice, isLifetimePrice, lifetimeFeatureLabel } from "@/lib/pricing";
 import { startCheckout, isCheckoutSuccess } from "@/lib/stripe";
@@ -51,7 +50,7 @@ function PricingContent() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const syncReady = useSubscriptionSyncStore((s) => s.ready);
   const setServerSubscription = useSubscriptionSyncStore((s) => s.setServerSubscription);
-  const hasActiveAccess = hasPrivateAccess() || (syncReady && hasPaidAccess(selectedPlan));
+  const hasActiveAccess = syncReady && hasPaidAccess(selectedPlan);
   const [cycle, setCycle] = useState<BillingCycle>("annual");
   const [coupon, setCoupon] = useState("");
   const [loadingPlan, setLoadingPlan] = useState<Plan | null>(null);

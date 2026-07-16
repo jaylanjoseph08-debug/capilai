@@ -1,8 +1,9 @@
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import {
   getSubscriptionByUserId,
   isActiveSubscriptionStatus,
+  resolveSubscriptionPeriodEnd,
   type DbSubscription,
 } from "@/lib/subscription-db";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
@@ -46,7 +47,7 @@ async function enrichFromStripe(
     const stripe = getStripe();
     const subscription = await stripe.subscriptions.retrieve(row.stripe_subscription_id);
     return {
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      currentPeriodEnd: resolveSubscriptionPeriodEnd(subscription)?.toISOString() ?? row.current_period_end,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
     };
   } catch (error) {

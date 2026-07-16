@@ -1,4 +1,4 @@
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Plan, BillingCycle } from "./subscriptionStore";
 import {
@@ -12,6 +12,7 @@ import {
   resolveCheckoutPlan,
   resolveLifetimeFromSession,
   resolvePriceIdFromSession,
+  resolveSubscriptionPeriodEnd,
   upsertSubscription,
   type SubscriptionStatus,
 } from "./subscription-db";
@@ -83,7 +84,7 @@ async function upsertFromStripeSubscription(
       typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null,
     stripeSubscriptionId: subscription.id,
     stripePriceId: priceId,
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    currentPeriodEnd: resolveSubscriptionPeriodEnd(subscription),
   });
 
   return !error;
@@ -139,7 +140,7 @@ export async function syncSubscriptionFromCheckoutSession(
     if (!isActiveSubscriptionStatus(status)) {
       return { ok: false, code: "SUBSCRIPTION_INACTIVE", message: subscription.status };
     }
-    currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    currentPeriodEnd = resolveSubscriptionPeriodEnd(subscription);
 
     // New checkout after a pending cancellation — reactivate billing on the new subscription.
     if (subscription.cancel_at_period_end) {
@@ -249,45 +250,30 @@ async function findCompletedCheckoutSessionsForUser(
   stripe: Stripe,
   userId: string
 ): Promise<Stripe.Checkout.Session[]> {
-  const escapedUserId = escapeStripeSearchValue(userId);
+  // Note: the Stripe Search API does not support Checkout Sessions, so we page through
+  // recent sessions and match on metadata / client_reference_id.
   const byId = new Map<string, Stripe.Checkout.Session>();
 
-  async function collect(query: string) {
-    try {
-      const result = await stripe.checkout.sessions.search({ query, limit: 20 });
-      for (const session of result.data) {
-        byId.set(session.id, session);
-      }
-    } catch (error) {
-      console.warn("[stripe-subscription-sync] checkout session search failed", query, error);
-    }
-  }
+  try {
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const batch = await stripe.checkout.sessions.list({
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      if (batch.data.length === 0) break;
 
-  await collect(`metadata['supabase_user_id']:'${escapedUserId}' AND status:'complete'`);
-  await collect(`client_reference_id:'${escapedUserId}' AND status:'complete'`);
-
-  if (byId.size === 0) {
-    try {
-      let startingAfter: string | undefined;
-      for (let page = 0; page < 5; page++) {
-        const batch = await stripe.checkout.sessions.list({
-          limit: 100,
-          ...(startingAfter ? { starting_after: startingAfter } : {}),
-        });
-        if (batch.data.length === 0) break;
-
-        for (const session of batch.data) {
-          if (session.status === "complete" && sessionMatchesUser(session, userId)) {
-            byId.set(session.id, session);
-          }
+      for (const session of batch.data) {
+        if (session.status === "complete" && sessionMatchesUser(session, userId)) {
+          byId.set(session.id, session);
         }
-
-        if (!batch.has_more) break;
-        startingAfter = batch.data[batch.data.length - 1]?.id;
       }
-    } catch (error) {
-      console.warn("[stripe-subscription-sync] checkout session list fallback failed", error);
+
+      if (!batch.has_more) break;
+      startingAfter = batch.data[batch.data.length - 1]?.id;
     }
+  } catch (error) {
+    console.warn("[stripe-subscription-sync] checkout session list failed", error);
   }
 
   return [...byId.values()].sort((a, b) => b.created - a.created);

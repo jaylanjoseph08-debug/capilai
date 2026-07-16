@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:clean": "bash scripts/restart-dev.sh",
+    "stripe:e2e": "bash scripts/stripe-e2e-check.sh",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

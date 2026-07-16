@@ -80,12 +80,6 @@ export default function LandingPage() {
           >
             {profileLoading ? "…" : t("home.ctaProfile")}
           </button>
-          <Link
-            href="/private-access"
-            className="flex h-12 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-muted transition hover:text-copper"
-          >
-            {t("home.ctaPrivateAccess")}
-          </Link>
         </div>
       </div>
     </main>

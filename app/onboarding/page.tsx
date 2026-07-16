@@ -11,7 +11,6 @@ import { useHairAIStore } from "@/lib/store";
 import { useTranslation } from "@/lib/useTranslation";
 import { useAuthStore } from "@/lib/authStore";
 import { DIAGNOSIS_SIGNUP_PATH } from "@/lib/postAuthRedirect";
-import { hasPrivateAccess } from "@/lib/privateAccess";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -24,14 +23,13 @@ export default function OnboardingPage() {
   const isConfigured = useAuthStore((s) => s.isConfigured);
 
   useEffect(() => {
-    if (hasPrivateAccess()) return;
     if (isLoading) return;
     if (isConfigured && !isAuthenticated) {
       router.replace(DIAGNOSIS_SIGNUP_PATH);
     }
   }, [isAuthenticated, isConfigured, isLoading, router]);
 
-  if (!hasPrivateAccess() && isConfigured && (isLoading || !isAuthenticated)) {
+  if (isConfigured && (isLoading || !isAuthenticated)) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink-radial px-6">
         <p className="font-body text-sm text-muted">…</p>

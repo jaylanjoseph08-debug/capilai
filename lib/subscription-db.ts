@@ -64,6 +64,43 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Safely convert a Stripe Unix timestamp (seconds) to a Date. Returns null for missing/invalid values. */
+export function dateFromStripeTimestamp(seconds: number | null | undefined): Date | null {
+  if (seconds === null || seconds === undefined) return null;
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
+    console.warn("[subscription-db] invalid Stripe timestamp, ignoring:", seconds);
+    return null;
+  }
+  const date = new Date(seconds * 1000);
+  if (Number.isNaN(date.getTime())) {
+    console.warn("[subscription-db] Stripe timestamp produced an invalid Date, ignoring:", seconds);
+    return null;
+  }
+  return date;
+}
+
+/**
+ * Resolve the billing period end of a Stripe subscription.
+ * Newer Stripe API versions (>= 2025-03-31.basil) removed `current_period_end` from the
+ * Subscription object and moved it to subscription items — handle both shapes.
+ */
+export function resolveSubscriptionPeriodEnd(subscription: Stripe.Subscription): Date | null {
+  const fromSubscription = (subscription as { current_period_end?: number | null }).current_period_end;
+  const fromItem = (subscription.items?.data?.[0] as { current_period_end?: number | null } | undefined)
+    ?.current_period_end;
+  return dateFromStripeTimestamp(fromSubscription ?? fromItem);
+}
+
+/** ISO string for Supabase timestamptz columns; never throws on invalid/missing dates. */
+function toIsoStringOrNull(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  if (Number.isNaN(date.getTime())) {
+    console.warn("[subscription-db] refusing to serialize invalid Date (would throw RangeError), storing null instead.");
+    return null;
+  }
+  return date.toISOString();
+}
+
 const ACTIVE_STATUSES: SubscriptionStatus[] = ["active", "trialing", "lifetime"];
 
 export function isActiveSubscriptionStatus(status: SubscriptionStatus): boolean {
@@ -149,7 +186,7 @@ export async function upsertSubscription(
     stripe_customer_id: input.stripeCustomerId ?? null,
     stripe_subscription_id: input.stripeSubscriptionId ?? null,
     stripe_price_id: input.stripePriceId ?? null,
-    current_period_end: input.currentPeriodEnd?.toISOString() ?? null,
+    current_period_end: toIsoStringOrNull(input.currentPeriodEnd),
     updated_at: new Date().toISOString(),
   };
 
@@ -296,7 +333,7 @@ export async function upsertPendingSubscription(
     stripe_customer_id: input.stripeCustomerId ?? null,
     stripe_subscription_id: input.stripeSubscriptionId ?? null,
     stripe_price_id: input.stripePriceId ?? null,
-    current_period_end: input.currentPeriodEnd?.toISOString() ?? null,
+    current_period_end: toIsoStringOrNull(input.currentPeriodEnd),
     updated_at: new Date().toISOString(),
   };
 

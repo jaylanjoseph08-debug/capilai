@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useAuthStore } from "@/lib/authStore";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { hasPrivateAccess } from "@/lib/privateAccess";
 import { useHairAIStore } from "@/lib/store";
 import {
   fetchProfileFromServer,
@@ -22,11 +21,6 @@ export function ProfileSync() {
   const reset = useProfileSyncStore((s) => s.reset);
 
   useEffect(() => {
-    if (hasPrivateAccess()) {
-      markReady();
-      return;
-    }
-
     if (!isSupabaseConfigured() || !isConfigured) {
       markReady();
       return;

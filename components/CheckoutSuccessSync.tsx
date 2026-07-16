@@ -13,6 +13,7 @@ import { useSubscriptionSyncStore } from "@/lib/subscriptionSyncStore";
 import { verifyCheckoutSession, isCheckoutSessionVerified } from "@/lib/stripe";
 import { savePendingCheckoutSessionId } from "@/lib/pendingCheckoutSession";
 import { useTranslation } from "@/lib/useTranslation";
+import type { TranslationKey } from "@/lib/i18n";
 
 type CheckoutSuccessSyncProps = {
   redirectPath?: string;
@@ -22,7 +23,7 @@ type CheckoutSuccessSyncProps = {
 function activationErrorMessage(
   code: string | undefined,
   fallback: string,
-  t: (key: string) => string
+  t: (key: TranslationKey) => string
 ): string {
   switch (code) {
     case "AUTH_REQUIRED":
