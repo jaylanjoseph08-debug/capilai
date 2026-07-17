@@ -69,7 +69,7 @@ export async function verifyCheckoutSession(
       return {
         configured: res.status !== 501,
         error: errorBody.error ?? `HTTP ${res.status}`,
-        code: "SESSION_VERIFY_FAILED",
+        code: errorBody.code ?? "SESSION_VERIFY_FAILED",
       };
     }
 

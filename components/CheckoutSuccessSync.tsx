@@ -30,6 +30,12 @@ function activationErrorMessage(
       return t("pricing.checkoutLoginRequired");
     case "USER_MISMATCH":
       return t("pricing.checkoutUserMismatch");
+    case "SUBSCRIPTIONS_TABLE_MISSING":
+    case "UPSERT_FAILED":
+      return t("pricing.checkoutDbError");
+    case "STRIPE_MODE_MISMATCH":
+    case "STRIPE_ERROR":
+      return t("pricing.checkoutStripeConfigError");
     default:
       return fallback;
   }
@@ -44,22 +50,46 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setServerSubscription = useSubscriptionSyncStore((s) => s.setServerSubscription);
   const markReady = useSubscriptionSyncStore((s) => s.markReady);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [syncing, setSyncing] = useState(false);
+  const checkout = searchParams.get("checkout");
+  const sessionIdFromUrl = searchParams.get("session_id")?.trim() ?? null;
+  const isCheckoutSuccess = checkout === "success" && Boolean(sessionIdFromUrl);
+
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
+    isCheckoutSuccess ? { type: "success", message: t("pricing.checkoutActivating") } : null
+  );
+  const [syncing, setSyncing] = useState(isCheckoutSuccess);
   const [canRetry, setCanRetry] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const processedSessionRef = useRef<string | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(sessionIdFromUrl);
   const paymentVerifiedRef = useRef(false);
   const wasAuthenticatedRef = useRef(isAuthenticated);
+  const inFlightRef = useRef(false);
 
   const loginHref = `/login?next=${encodeURIComponent(
     `${pathname}?${searchParams.toString()}`
   )}`;
 
+  const finishSuccess = useCallback(
+    (payload: NonNullable<Awaited<ReturnType<typeof pollSubscriptionUntilActive>>["payload"]>) => {
+      setServerSubscription(payload);
+      mirrorServerPlanToLocal(payload);
+      markReady();
+      onSuccess?.();
+      // Always strip checkout query params so the dashboard exits the "activating" shell.
+      router.replace(redirectPath, { scroll: false });
+    },
+    [markReady, onSuccess, redirectPath, router, setServerSubscription]
+  );
+
   const runActivation = useCallback(
     async (sessionId: string, options?: { skipVerify?: boolean }) => {
-      if (isAuthLoading) return;
+      if (inFlightRef.current) return;
+      if (isAuthLoading) {
+        setSyncing(true);
+        setNotice({ type: "success", message: t("pricing.checkoutActivating") });
+        return;
+      }
 
       if (!isAuthenticated) {
         setSyncing(false);
@@ -69,71 +99,67 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
         return;
       }
 
+      inFlightRef.current = true;
       setSyncing(true);
       setCanRetry(false);
       setNeedsLogin(false);
-      setNotice(null);
+      setNotice({ type: "success", message: t("pricing.checkoutActivating") });
 
-      if (!options?.skipVerify && !paymentVerifiedRef.current) {
-        const verified = await verifyCheckoutSession(sessionId);
-        if (!isCheckoutSessionVerified(verified)) {
+      try {
+        if (!options?.skipVerify && !paymentVerifiedRef.current) {
+          const verified = await verifyCheckoutSession(sessionId);
+          if (!isCheckoutSessionVerified(verified)) {
+            setSyncing(false);
+            setCanRetry(true);
+            setNotice({
+              type: "error",
+              message: activationErrorMessage(
+                "code" in verified ? verified.code : undefined,
+                verified.error ?? t("settings.checkoutVerifyError"),
+                t
+              ),
+            });
+            return;
+          }
+          paymentVerifiedRef.current = true;
+        }
+
+        const result = await pollSubscriptionUntilActive(sessionId);
+
+        if (result.activateError) {
+          const needsAuth = result.activateError.code === "AUTH_REQUIRED";
+          setNeedsLogin(needsAuth);
+          setCanRetry(!needsAuth);
           setSyncing(false);
-          setCanRetry(true);
           setNotice({
             type: "error",
-            message: verified.error ?? t("settings.checkoutVerifyError"),
+            message: activationErrorMessage(
+              result.activateError.code,
+              result.activateError.error || t("pricing.checkoutSyncFailed"),
+              t
+            ),
           });
           return;
         }
-        paymentVerifiedRef.current = true;
-      }
 
-      setNotice({ type: "success", message: t("pricing.checkoutActivating") });
+        const payload = result.payload;
+        if (payload && hasServerActiveSubscription(payload)) {
+          setSyncing(false);
+          finishSuccess(payload);
+          return;
+        }
 
-      const result = await pollSubscriptionUntilActive(sessionId);
-      setSyncing(false);
-
-      if (result.activateError) {
-        const needsAuth = result.activateError.code === "AUTH_REQUIRED";
-        setNeedsLogin(needsAuth);
-        setCanRetry(!needsAuth);
+        setSyncing(false);
+        setCanRetry(true);
         setNotice({
           type: "error",
-          message: activationErrorMessage(
-            result.activateError.code,
-            result.activateError.error || t("pricing.checkoutSyncFailed"),
-            t
-          ),
+          message: t("pricing.checkoutSyncFailed"),
         });
-        return;
+      } finally {
+        inFlightRef.current = false;
       }
-
-      const payload = result.payload;
-      if (hasServerActiveSubscription(payload)) {
-        setServerSubscription(payload);
-        mirrorServerPlanToLocal(payload);
-        markReady();
-        onSuccess?.();
-        router.replace(redirectPath, { scroll: false });
-        return;
-      }
-
-      setCanRetry(true);
-      setNotice({
-        type: "error",
-        message: t("pricing.checkoutSyncFailed"),
-      });
     },
-    [
-      isAuthLoading,
-      isAuthenticated,
-      markReady,
-      onSuccess,
-      redirectPath,
-      router,
-      setServerSubscription,
-      t,
-    ]
+    [finishSuccess, isAuthLoading, isAuthenticated, t]
   );
 
   useEffect(() => {
@@ -144,27 +170,28 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
   }, [isAuthenticated]);
 
   useEffect(() => {
-    const checkout = searchParams.get("checkout");
-    const sessionId = searchParams.get("session_id")?.trim();
-    if (checkout !== "success" || !sessionId) return;
-    if (isAuthLoading) return;
-    if (processedSessionRef.current === sessionId && !needsLogin) return;
+    if (!isCheckoutSuccess || !sessionIdFromUrl) return;
+    if (isAuthLoading) {
+      setSyncing(true);
+      return;
+    }
+    if (processedSessionRef.current === sessionIdFromUrl && !needsLogin) return;
 
-    processedSessionRef.current = sessionId;
-    sessionIdRef.current = sessionId;
-    savePendingCheckoutSessionId(sessionId);
+    processedSessionRef.current = sessionIdFromUrl;
+    sessionIdRef.current = sessionIdFromUrl;
+    savePendingCheckoutSessionId(sessionIdFromUrl);
 
-    void runActivation(sessionId);
-  }, [searchParams, isAuthLoading, isAuthenticated, runActivation, needsLogin]);
+    void runActivation(sessionIdFromUrl);
+  }, [isCheckoutSuccess, sessionIdFromUrl, isAuthLoading, isAuthenticated, runActivation, needsLogin]);
 
   function handleRetry() {
-    const sessionId = sessionIdRef.current ?? searchParams.get("session_id")?.trim();
+    const sessionId = sessionIdRef.current ?? sessionIdFromUrl;
     if (!sessionId) return;
     processedSessionRef.current = null;
     void runActivation(sessionId, { skipVerify: paymentVerifiedRef.current });
   }
 
-  if (!notice && !syncing && !needsLogin) return null;
+  if (!isCheckoutSuccess && !notice && !syncing && !needsLogin) return null;
 
   return (
     <div className="mx-auto mb-4 max-w-md">
@@ -175,7 +202,7 @@ function CheckoutSuccessSyncInner({ redirectPath = "/dashboard", onSuccess }: Ch
             : "border-copper/30 bg-copper/10 text-cream/90"
         }`}
       >
-        {syncing && !notice ? t("pricing.checkoutActivating") : notice?.message}
+        {notice?.message ?? t("pricing.checkoutActivating")}
       </p>
       {needsLogin && !syncing && (
         <Link

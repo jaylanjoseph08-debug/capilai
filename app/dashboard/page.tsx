@@ -58,6 +58,13 @@ function DashboardContent() {
     }
   }, [profile, plan, syncReady, activatingCheckout, router]);
 
+  // Payment succeeded and subscription is active — leave the activating shell.
+  useEffect(() => {
+    if (!activatingCheckout || !syncReady) return;
+    if (!hasPaidAccess(plan)) return;
+    router.replace("/dashboard", { scroll: false });
+  }, [activatingCheckout, syncReady, plan, router]);
+
   if (activatingCheckout && (!syncReady || !hasPaidAccess(plan))) {
     return (
       <main className="flex min-h-screen flex-col justify-center bg-ink-radial px-6 pb-24">

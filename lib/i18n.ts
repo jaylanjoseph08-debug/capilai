@@ -196,6 +196,10 @@ const translations = {
       checkoutLoginButton: "Sign in",
       checkoutUserMismatch:
         "This payment belongs to another Capil AI account. Sign in with Google (the account used before checkout), not your Apple Pay billing email.",
+      checkoutDbError:
+        "Payment received but we could not save your subscription (database). Contact support or retry after the fix is deployed.",
+      checkoutStripeConfigError:
+        "Payment received but Stripe keys on the server do not match this checkout (live vs test). Check Vercel STRIPE_SECRET_KEY.",
       lifetimeFeature: "Lifetime access",
     },
     plans: {
@@ -563,6 +567,10 @@ const translations = {
       checkoutLoginButton: "Se connecter",
       checkoutUserMismatch:
         "Ce paiement est lié à un autre compte Capil AI. Reconnectez-vous avec Google (le compte utilisé avant le paiement), pas avec l'e-mail Apple Pay.",
+      checkoutDbError:
+        "Paiement reçu mais l'abonnement n'a pas pu être enregistré (base de données). Contactez le support ou réessayez après le déploiement du correctif.",
+      checkoutStripeConfigError:
+        "Paiement reçu mais les clés Stripe du serveur ne correspondent pas à ce paiement (live vs test). Vérifiez STRIPE_SECRET_KEY sur Vercel.",
       lifetimeFeature: "Accès à vie",
     },
     plans: {

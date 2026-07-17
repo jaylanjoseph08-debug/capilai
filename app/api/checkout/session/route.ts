@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import type { Plan, BillingCycle } from "@/lib/subscriptionStore";
 import { apiError, apiNotConfigured } from "@/lib/apiErrors";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
@@ -50,6 +51,23 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("[checkout/session]", error);
+    if (error instanceof Stripe.errors.StripeError) {
+      const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+      const isLiveSession = sessionId.startsWith("cs_live_");
+      const isTestSession = sessionId.startsWith("cs_test_");
+      const keyIsLive = key.startsWith("sk_live_");
+      const keyIsTest = key.startsWith("sk_test_");
+      if ((isLiveSession && keyIsTest) || (isTestSession && keyIsLive)) {
+        return apiError(
+          "Stripe secret key mode does not match this checkout session (live vs test).",
+          502,
+          { code: "STRIPE_MODE_MISMATCH" }
+        );
+      }
+      return apiError(error.message || "Could not verify checkout session", 500, {
+        code: "STRIPE_ERROR",
+      });
+    }
     return apiError("Could not verify checkout session", 500, { code: "STRIPE_ERROR" });
   }
 }

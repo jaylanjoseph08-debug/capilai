@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import { getAuthUserFromRequest } from "@/lib/auth/server";
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import { apiError, apiNotConfigured, parseJsonBody } from "@/lib/apiErrors";
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[subscription/activate]", error);
+
     if (/Could not find the table|PGRST205|schema cache/i.test(message)) {
       return apiError(
         "Database table public.subscriptions is missing. Run supabase/setup-all.sql on your Supabase project.",
@@ -81,6 +83,25 @@ export async function POST(req: NextRequest) {
         { code: "SUBSCRIPTIONS_TABLE_MISSING" }
       );
     }
+
+    if (error instanceof Stripe.errors.StripeError) {
+      const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+      const isLiveSession = sessionId.startsWith("cs_live_");
+      const isTestSession = sessionId.startsWith("cs_test_");
+      const keyIsLive = key.startsWith("sk_live_");
+      const keyIsTest = key.startsWith("sk_test_");
+      if ((isLiveSession && keyIsTest) || (isTestSession && keyIsLive)) {
+        return apiError(
+          "Stripe secret key mode does not match this checkout session (live vs test).",
+          502,
+          { code: "STRIPE_MODE_MISMATCH" }
+        );
+      }
+      return apiError(error.message || "Failed to activate subscription", 502, {
+        code: "STRIPE_ERROR",
+      });
+    }
+
     return apiError("Failed to activate subscription", 500, { code: "ACTIVATION_ERROR" });
   }
 }
