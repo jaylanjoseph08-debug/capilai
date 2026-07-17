@@ -11,6 +11,7 @@ import {
   isLifetimeStripeCheckout,
 } from "@/lib/stripe-prices";
 import type { CheckoutSuccessResponse } from "@/lib/stripe-types";
+import { resolveCheckoutOrigin } from "@/lib/site-origin";
 
 export const runtime = "nodejs";
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   const stripe = getStripe();
-  const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || req.nextUrl.origin;
+  const origin = resolveCheckoutOrigin(req);
 
   try {
     const price = await stripe.prices.retrieve(priceId);

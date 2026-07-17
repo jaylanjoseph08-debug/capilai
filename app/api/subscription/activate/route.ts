@@ -72,7 +72,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ...payload, activated: true });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("[subscription/activate]", error);
+    if (/Could not find the table|PGRST205|schema cache/i.test(message)) {
+      return apiError(
+        "Database table public.subscriptions is missing. Run supabase/setup-all.sql on your Supabase project.",
+        500,
+        { code: "SUBSCRIPTIONS_TABLE_MISSING" }
+      );
+    }
     return apiError("Failed to activate subscription", 500, { code: "ACTIVATION_ERROR" });
   }
 }

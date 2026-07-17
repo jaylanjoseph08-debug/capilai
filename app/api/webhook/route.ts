@@ -3,6 +3,12 @@ import Stripe from "stripe";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import {
+  constructStripeEvent,
+  getStripeWebhookConfigSnapshot,
+  getStripeWebhookSecrets,
+  stripeSecretKeyMode,
+} from "@/lib/stripe-webhook";
+import {
   handleCheckoutSessionCompleted,
   handleInvoicePaymentSucceeded,
   handleSubscriptionDeleted,
@@ -12,22 +18,59 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+/** Safe config probe — no secrets returned. Useful to verify Vercel env after deploy. */
+export async function GET() {
+  const snapshot = getStripeWebhookConfigSnapshot();
+  const supabaseReady = isSupabaseAdminConfigured();
+
+  let subscriptionsTableOk: boolean | null = null;
+  let subscriptionsTableError: string | null = null;
+
+  if (supabaseReady) {
+    try {
+      const admin = getSupabaseAdmin();
+      const { error } = await admin.from("subscriptions").select("user_id").limit(1);
+      if (error) {
+        subscriptionsTableOk = false;
+        subscriptionsTableError = error.message;
+      } else {
+        subscriptionsTableOk = true;
+      }
+    } catch (err) {
+      subscriptionsTableOk = false;
+      subscriptionsTableError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  const ready =
+    snapshot.stripeSecretKeySet &&
+    snapshot.webhookSecretCount > 0 &&
+    snapshot.supabaseServiceRoleKeySet &&
+    subscriptionsTableOk === true;
+
+  return NextResponse.json({
+    ok: ready,
+    ...snapshot,
+    subscriptionsTableOk,
+    subscriptionsTableError,
+    hint: ready
+      ? "Webhook config looks ready. Ensure Stripe Dashboard points to /api/webhook (Live mode for live payments)."
+      : "Fix missing env vars / create public.subscriptions (run supabase/setup-all.sql), then redeploy.",
+  });
+}
+
 export async function POST(req: NextRequest) {
   const receivedAt = Date.now();
   console.info("\n[stripe webhook] ── incoming request ──────────────────────");
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secrets = getStripeWebhookSecrets();
   const stripeReady = isStripeConfigured();
   const supabaseReady = isSupabaseAdminConfigured();
+  const keyMode = stripeSecretKeyMode();
 
-  console.info("[stripe webhook] config check", {
-    stripeSecretKeySet: stripeReady,
-    webhookSecretSet: Boolean(webhookSecret),
-    supabaseServiceRoleKeySet: supabaseReady,
-    supabaseUrlSet: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()),
-  });
+  console.info("[stripe webhook] config check", getStripeWebhookConfigSnapshot());
 
-  if (!stripeReady || !webhookSecret) {
+  if (!stripeReady || secrets.length === 0) {
     console.error("[stripe webhook] ❌ ABORT — Stripe not configured (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET missing).");
     return NextResponse.json({ error: "Stripe webhook is not configured." }, { status: 501 });
   }
@@ -51,15 +94,33 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    console.info("[stripe webhook] ✅ signature verified");
+    const verified = constructStripeEvent(stripe, body, signature);
+    event = verified.event;
+    console.info("[stripe webhook] ✅ signature verified", { secretIndex: verified.secretIndex });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid signature";
     console.error(
       `[stripe webhook] ❌ ABORT — signature verification failed: ${message}\n` +
-        "  → Likely cause: STRIPE_WEBHOOK_SECRET in .env.local does not match the `stripe listen` / dashboard endpoint secret."
+        "  → On Vercel, set STRIPE_WEBHOOK_SECRET to the Dashboard endpoint secret (whsec_…),\n" +
+        "    not (only) the Stripe CLI secret from `stripe listen`.\n" +
+        "  → You can set both: STRIPE_WEBHOOK_SECRET (Dashboard) + STRIPE_WEBHOOK_SECRET_CLI (local).\n" +
+        "  → Live payments need a Live-mode endpoint + Live whsec; Test payments need Test-mode endpoint + Test whsec."
     );
     return new NextResponse(`Webhook Error: ${message}`, { status: 400 });
+  }
+
+  if ((event.livemode && keyMode === "test") || (!event.livemode && keyMode === "live")) {
+    console.error("[stripe webhook] ❌ ABORT — Stripe mode mismatch", {
+      eventLivemode: event.livemode,
+      stripeKeyMode: keyMode,
+      hint: event.livemode
+        ? "Event is LIVE but STRIPE_SECRET_KEY is sk_test_… — set sk_live_… on Vercel Production."
+        : "Event is TEST but STRIPE_SECRET_KEY is sk_live_… — use matching modes.",
+    });
+    return NextResponse.json(
+      { error: "Stripe key mode does not match event.livemode" },
+      { status: 400 }
+    );
   }
 
   try {
@@ -101,8 +162,10 @@ export async function POST(req: NextRequest) {
     console.error("[stripe webhook] internal handler error", {
       id: event.id,
       type: event.type,
+      message: error instanceof Error ? error.message : String(error),
       error,
     });
+    // 500 → Stripe retries; critical so a failed Supabase upsert is not silently dropped.
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 

@@ -115,9 +115,9 @@ export async function handleCheckoutSessionCompleted(
 
     if (error) {
       console.error(`${tag} ❌ Supabase upsertPendingSubscription FAILED:`, error);
-    } else {
-      console.info(`${tag} ✅ pending_subscriptions row written for "${email}"`);
+      throw new Error(`upsertPendingSubscription failed: ${error}`);
     }
+    console.info(`${tag} ✅ pending_subscriptions row written for "${email}"`);
     return;
   }
 
@@ -146,9 +146,12 @@ export async function handleCheckoutSessionCompleted(
       `${tag} ❌ Supabase upsertSubscription FAILED — this is very likely why the app keeps redirecting to /pricing:`,
       error
     );
-  } else {
-    console.info(`${tag} ✅ SUCCESS — subscriptions row upserted for user ${userId} (plan: ${plan}, status: ${status})`);
+    // Must throw so the webhook route returns 5xx and Stripe retries.
+    // Returning silently made Stripe mark the event as delivered while the DB stayed empty.
+    throw new Error(`upsertSubscription failed: ${error}`);
   }
+
+  console.info(`${tag} ✅ SUCCESS — subscriptions row upserted for user ${userId} (plan: ${plan}, status: ${status})`);
 }
 
 export async function handleInvoicePaymentSucceeded(
@@ -192,7 +195,7 @@ export async function handleInvoicePaymentSucceeded(
     return;
   }
 
-  await upsertSubscription(admin, {
+  const { error } = await upsertSubscription(admin, {
     userId,
     plan,
     status: mapStripeSubscriptionStatus(subscription.status),
@@ -203,6 +206,10 @@ export async function handleInvoicePaymentSucceeded(
     stripePriceId: priceId,
     currentPeriodEnd: resolveSubscriptionPeriodEnd(subscription),
   });
+
+  if (error) {
+    throw new Error(`invoice.payment_succeeded upsert failed: ${error}`);
+  }
 }
 
 export async function handleSubscriptionUpdated(
@@ -219,7 +226,7 @@ export async function handleSubscriptionUpdated(
   const priceId = subscription.items.data[0]?.price?.id ?? existing.stripe_price_id;
   const status = mapStripeSubscriptionStatus(subscription.status);
 
-  await upsertSubscription(admin, {
+  const { error } = await upsertSubscription(admin, {
     userId: existing.user_id,
     plan: existing.plan,
     status,
@@ -230,6 +237,10 @@ export async function handleSubscriptionUpdated(
     stripePriceId: priceId,
     currentPeriodEnd: resolveSubscriptionPeriodEnd(subscription),
   });
+
+  if (error) {
+    throw new Error(`subscription.updated upsert failed: ${error}`);
+  }
 }
 
 export async function handleSubscriptionDeleted(
@@ -239,7 +250,7 @@ export async function handleSubscriptionDeleted(
   const existing = await getSubscriptionByStripeSubscriptionId(admin, subscription.id);
   if (!existing) return;
 
-  await upsertSubscription(admin, {
+  const { error } = await upsertSubscription(admin, {
     userId: existing.user_id,
     plan: existing.plan,
     status: "canceled",
@@ -250,6 +261,10 @@ export async function handleSubscriptionDeleted(
     stripePriceId: existing.stripe_price_id,
     currentPeriodEnd: null,
   });
+
+  if (error) {
+    throw new Error(`subscription.deleted upsert failed: ${error}`);
+  }
 }
 
 function planFromInvoiceMetadata(invoice: Stripe.Invoice): Plan | null {
