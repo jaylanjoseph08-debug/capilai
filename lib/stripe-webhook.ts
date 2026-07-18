@@ -1,4 +1,5 @@
-import Stripe from "stripe";
+import type Stripe from "stripe";
+import { getStripeSecretKey } from "./stripe-prices";
 
 /** Collect all configured webhook signing secrets (Dashboard + optional CLI / extras). */
 export function getStripeWebhookSecrets(): string[] {
@@ -12,7 +13,6 @@ export function getStripeWebhookSecrets(): string[] {
   const out: string[] = [];
   for (const raw of secrets) {
     if (!raw?.trim()) continue;
-    // Allow comma-separated list in a single env var (useful during secret rotation).
     for (const part of raw.split(",")) {
       const trimmed = part.trim();
       if (trimmed && !out.includes(trimmed)) out.push(trimmed);
@@ -22,7 +22,7 @@ export function getStripeWebhookSecrets(): string[] {
 }
 
 export function stripeSecretKeyMode(): "live" | "test" | "unknown" {
-  const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+  const key = getStripeSecretKey() ?? "";
   if (key.startsWith("sk_live_")) return "live";
   if (key.startsWith("sk_test_")) return "test";
   return "unknown";
@@ -61,7 +61,7 @@ export function getStripeWebhookConfigSnapshot() {
   const secrets = getStripeWebhookSecrets();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
   return {
-    stripeSecretKeySet: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
+    stripeSecretKeySet: Boolean(getStripeSecretKey()),
     stripeKeyMode: stripeSecretKeyMode(),
     webhookSecretCount: secrets.length,
     webhookSecretPrefixes: secrets.map((s) => `${s.slice(0, 10)}…`),

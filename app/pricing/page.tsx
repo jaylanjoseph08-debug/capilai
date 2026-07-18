@@ -57,6 +57,7 @@ function PricingContent() {
   const [notice, setNotice] = useState("");
   const [checkoutAvailability, setCheckoutAvailability] = useState<CheckoutAvailability>(EMPTY_AVAILABILITY);
   const [checkoutConfigLoaded, setCheckoutConfigLoaded] = useState(false);
+  const [stripeServerConfigured, setStripeServerConfigured] = useState(true);
 
   const discount = coupon.trim().toUpperCase() === "MECHE10" ? 0.1 : 0;
 
@@ -66,9 +67,16 @@ function PricingContent() {
       try {
         const res = await fetch("/api/checkout/config", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { plans?: CheckoutAvailability };
-        if (!cancelled && data.plans) {
-          setCheckoutAvailability(data.plans);
+        const data = (await res.json()) as {
+          configured?: boolean;
+          plans?: CheckoutAvailability;
+          diagnostics?: { hint?: string; secretKeyPresent?: boolean };
+        };
+        if (cancelled) return;
+        if (data.plans) setCheckoutAvailability(data.plans);
+        setStripeServerConfigured(Boolean(data.configured));
+        if (data.configured === false) {
+          setNotice(data.diagnostics?.hint || t("pricing.checkoutStripeNotConfigured"));
         }
       } catch {
         // ignore — checkout API will surface errors on click
@@ -80,7 +88,7 @@ function PricingContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!fromLogin || !isAuthenticated || !syncReady) return;
@@ -113,8 +121,12 @@ function PricingContent() {
       return;
     }
 
-    if (checkoutConfigLoaded && !checkoutAvailability[plan][cycle]) {
-      setNotice(t("pricing.checkoutNotConfigured"));
+    if (checkoutConfigLoaded && (!stripeServerConfigured || !checkoutAvailability[plan][cycle])) {
+      setNotice(
+        !stripeServerConfigured
+          ? t("pricing.checkoutStripeNotConfigured")
+          : t("pricing.checkoutNotConfigured")
+      );
       return;
     }
 

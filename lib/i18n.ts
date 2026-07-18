@@ -177,6 +177,8 @@ const translations = {
       promoApplied: "Code applied: -10% on paid plans.",
       stripeError: "Could not open Stripe checkout. Please try again or contact support.",
       checkoutNotConfigured: "This plan is not available for checkout yet (Stripe price missing on the server).",
+      checkoutStripeNotConfigured:
+        "Stripe is not configured on this deployment (STRIPE_SECRET_KEY missing). Add it in Vercel Production env and redeploy.",
       demoMode: "Demo mode: Stripe not configured, plan applied locally.",
       limitReached: "You've reached your monthly hair scan limit. Upgrade your plan to continue.",
       perMonth: "/mo",
@@ -548,6 +550,8 @@ const translations = {
       promoApplied: "Code appliqué : -10% sur les offres payantes.",
       stripeError: "Impossible d'ouvrir le paiement Stripe. Réessayez ou contactez le support.",
       checkoutNotConfigured: "Cette formule n'est pas disponible au paiement (tarif Stripe manquant sur le serveur).",
+      checkoutStripeNotConfigured:
+        "Stripe n'est pas configuré sur ce déploiement (STRIPE_SECRET_KEY manquante). Ajoutez-la dans Vercel Production puis redéployez.",
       demoMode: "Mode démo : Stripe non configuré, plan appliqué localement.",
       limitReached: "Limite mensuelle de scans cheveux atteinte. Passez à la formule supérieure pour continuer.",
       perMonth: "/mois",

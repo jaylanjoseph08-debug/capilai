@@ -1,9 +1,10 @@
 import Stripe from "stripe";
+import { getStripeSecretKey } from "./stripe-prices";
 
 let stripeClient: Stripe | null = null;
 
 export function isStripeConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+  return Boolean(getStripeSecretKey());
 }
 
 export function getStripePublishableKey(): string | undefined {
@@ -15,7 +16,7 @@ export function getStripePublishableKey(): string | undefined {
 
 export function getStripe(): Stripe {
   if (!stripeClient) {
-    const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+    const secretKey = getStripeSecretKey();
     if (!secretKey) {
       throw new Error("STRIPE_SECRET_KEY is not set");
     }
